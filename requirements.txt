@@ -1,3 +1,4 @@
 haystack-ai
 python-dotenv
 pdfminer.six
+streamlit
