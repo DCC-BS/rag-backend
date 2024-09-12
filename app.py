@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 from document_storrage import create_inmemory_document_store
 from rag_pipeline import SHRAGPipeline
+from collections import defaultdict
 
 load_dotenv()
 
@@ -10,6 +11,7 @@ TITLE_NAME = 'Sozialhilfe RAG Chat Bot'
 UI_RENDERED_MESSAGES = 'ui_rendered_messages'
 CHAT_HISTORY = 'chat_history'
 CONVERSATIONAL_PIPELINE = 'conversational_pipeline'
+RELEVANT_DOCUMENTS = 'None'
 
 
 def main():
@@ -21,6 +23,7 @@ def main():
     setup_page()
     render_chat_history()
     manage_chat()
+    render_debug_section()
 
 
 def load_config():
@@ -36,7 +39,8 @@ def load_config():
         TITLE_NAME: 'Sozialhilfe RAG Chat Bot',
         UI_RENDERED_MESSAGES: [],
         CHAT_HISTORY: [],
-        CONVERSATIONAL_PIPELINE: SHRAGPipeline(document_store)
+        CONVERSATIONAL_PIPELINE: SHRAGPipeline(document_store),
+        RELEVANT_DOCUMENTS: []
     }
 
 
@@ -74,7 +78,8 @@ def manage_chat():
         # Render AI assistant's response.
         with st.chat_message('assistant'):
             with st.spinner('Generating response . . .'):
-                response = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
+                response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
+                st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append({'role': 'assistant', 'content': response})
 
 
@@ -85,6 +90,33 @@ def render_chat_history():
     for message in st.session_state[UI_RENDERED_MESSAGES]:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
+
+def render_debug_section():
+    """
+    Render a debug section showing relevant documents grouped by file path.
+    """
+    if st.session_state[RELEVANT_DOCUMENTS]:
+        st.markdown("#### Debug Section: Relevant Documents")
+        
+        relevant_docs = defaultdict(list)
+        for document in st.session_state[RELEVANT_DOCUMENTS]:
+            doc_path = document.meta['file_path']
+            doc_page = document.meta['page_number']
+            doc_relevance_score = document.score
+            content = document.content
+            relevant_docs[doc_path].append({
+                'page': doc_page,
+                'content': content,
+                'relevance_score': doc_relevance_score
+            })
+        
+        for file_path, docs in relevant_docs.items():
+            with st.expander(f"File: {file_path}"):
+                for doc in docs:
+                    st.markdown(f"**Page:** {doc['page']}")
+                    st.markdown(f"**Relevance Score:** {doc['relevance_score']:.4f}")
+                    st.markdown(f"**Content:** {doc['content']}")
+                    st.markdown("---")
 
 
 if __name__ == '__main__':

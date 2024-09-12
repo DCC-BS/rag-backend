@@ -2,3 +2,4 @@ haystack-ai
 python-dotenv
 pdfminer.six
 streamlit
+sentence-transformers>=3.0.0
