@@ -1,8 +1,9 @@
 import os
-import streamlit as st
+
 import httpx
+import streamlit as st
 from haystack import Pipeline
-from haystack.components.builders import ChatPromptBuilder
+from haystack.components.builders import AnswerBuilder, ChatPromptBuilder
 from haystack.components.generators.chat import OpenAIChatGenerator
 from haystack.components.retrievers.in_memory import InMemoryBM25Retriever
 from haystack.dataclasses import ChatMessage, StreamingChunk
@@ -13,32 +14,48 @@ language = "German"
 
 class SHRAGPipeline:
     def __init__(self, document_store) -> None:
-        user_prompt_template = ChatMessage.from_user("""
-            Given these documents, answer the question.
-            Documents:
-            {% for doc in documents %}
-                {{ doc.content }}
-            {% endfor %}
-            Question: {{question}}
-            Answer:
-            """)
-        system_message = ChatMessage.from_system(
-            "You are an subject matter expert on welfare for the government in Basel. If you can not find the answer in the given documens, then say 'Sorry, I can not find the answer you are looking for.'. You always answer in {{language}}."
+        self.user_prompt_template = (
+            "Context information is below. \n"
+            "---------------------\n"
+            "{% for doc in documents %}"
+            "    {{ doc.content }}"
+            "{% endfor %}"
+            "---------------------\n"
+            "Given the context information and not prior knowledge, "
+            "answer the query. \n"
+            "Question: {{question}} \n"
+            "Answer: "
         )
-        self.messages = [system_message, user_prompt_template]
+        
+        system_message = ChatMessage.from_system((
+            "You are an subject matter expert at welfare regulations for the government in Basel, Switzerland."
+            "You act as an assistant for question-answering tasks."
+            "For every question you retrieve context information to create a truthful answer."
+            "If you can not find the answer in the context information,"
+            "just say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'."
+            "You always answer in {{language}}."
+        )
+        )
+        self.messages = [system_message, ChatMessage.from_user(self.user_prompt_template)]
 
-        retriever = InMemoryBM25Retriever(document_store=document_store)
+        retriever = InMemoryBM25Retriever(document_store=document_store, top_k=5)
         prompt_builder = ChatPromptBuilder(template=self.messages)
         llm = OpenAIChatGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"), streaming_callback=self.streamlit_write_streaming_chunk)
         llm.client._client = httpx.Client(proxy=os.environ.get("PROXY_URL"))
+        answer_builder = AnswerBuilder()
 
         rag_pipeline = Pipeline()
         rag_pipeline.add_component("retriever", retriever)
         rag_pipeline.add_component("prompt_builder", prompt_builder)
         rag_pipeline.add_component("llm", llm)
+        rag_pipeline.add_component("answer_builder", answer_builder)
         rag_pipeline.connect("retriever", "prompt_builder.documents")
         rag_pipeline.connect("prompt_builder.prompt", "llm.messages")
+        rag_pipeline.connect("llm.replies", "answer_builder.replies")
+        rag_pipeline.connect("retriever", "answer_builder.documents")
         self.rag_pipeline = rag_pipeline
+
+        rag_pipeline.draw("./rag_pipeline.png")
 
     def query(self, question: str) -> str:
          # Create a new Streamlit container for the AI's response.
@@ -50,18 +67,21 @@ class SHRAGPipeline:
         response = self.rag_pipeline.run(
             data={
                 "retriever": {"query": question},
+                "answer_builder": {"query": question},
                 "prompt_builder": {
                     "template_variables": {"question": question, "language": language},
                     "template": self.messages,
                 },
             }
         )
-
-        if 'replies' in response["llm"]:
-            response_content = response["llm"]['replies'][0].content
+        if 'answers' in response["answer_builder"]:
+            response_content = response["answer_builder"]['answers'][0].data
+            relevant_documents = response["answer_builder"]['answers'][0].documents
             # Add the assistant's response to the chat history.
             self.messages.append(ChatMessage.from_assistant(response_content))
-            return response_content
+            # Prepare new template message for the next user input.
+            self.messages.append(ChatMessage.from_user(self.user_prompt_template))
+            return response_content, relevant_documents
         else:
             raise Exception('No valid response or unexpected response format.')
 
