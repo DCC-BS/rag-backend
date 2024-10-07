@@ -11,6 +11,7 @@ from haystack.document_stores.types import DuplicatePolicy
 from lancedb_haystack import LanceDBDocumentStore
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.utils import Secret
+import lancedb
 # from embedding import get_document_embedder
 from utils import config_loader, find_files
 
@@ -18,35 +19,30 @@ config = config_loader("conf/conf.yaml")
 
 
 def get_sources_for_user_roles(user_roles: List[str]):
-    pdf_sources = []
-    word_sources = []
+    sources_per_organization = []
 
-    def _add_files(base_folder: str, pdf_sources, word_sources):
+    def _add_files(base_folder: str):
         docs = find_files(base_folder)
-        pdfs = docs.get(".pdf", None)
-        if pdfs:
-            pdf_sources += pdfs
-        docxs = docs.get(".docx", None)
-        if docxs:
-            word_sources += docxs
-        return pdf_sources, word_sources
+        pdfs = docs.get(".pdf", [])
+        docxs = docs.get(".docx", [])
+        return pdfs, docxs
 
     if "Sozialhilfe" in user_roles:
-        pdf_sources, word_sources = _add_files(
-            config["DOC_SOURCES"]["SH"], pdf_sources, word_sources
-        )
+        pdf_sources, word_sources = _add_files(config["DOC_SOURCES"]["SH"])
+        sources_per_organization.append({
+            "pdf_converter": {"sources": pdf_sources, 'meta':{'organization': 'Sozialhilfe'}},
+            "word_converter": {"sources": word_sources, 'meta':{'organization': 'Sozialhilfe'}}
+        })
     if "Ergänzungsleistungen" in user_roles:
-        pdf_sources, word_sources = _add_files(
-            config["DOC_SOURCES"]["EL"], pdf_sources, word_sources
-        )
-    return {
-        "pdf_converter": {"sources": pdf_sources},
-        "word_converter": {"sources": word_sources},
-    }
-
+        pdf_sources, word_sources = _add_files(config["DOC_SOURCES"]["EL"])
+        sources_per_organization.append({
+            "pdf_converter": {"sources": pdf_sources, 'meta':{'organization': 'Ergänzungsleistungen'}},
+            "word_converter": {"sources": word_sources, 'meta':{'organization': 'Ergänzungsleistungen'}}
+        })
+    return sources_per_organization
 
 def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentStore:
-    sources = get_sources_for_user_roles(user_roles)
+    sources_per_organization = get_sources_for_user_roles(user_roles)
     indexing_pipeline = Pipeline()
     document_store = InMemoryDocumentStore()
     document_writer = DocumentWriter(
@@ -66,19 +62,34 @@ def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentSto
     indexing_pipeline.connect("cleaner", "splitter")
     indexing_pipeline.connect("splitter", "writer")
 
-    indexing_pipeline.run(sources)
+    for sources in sources_per_organization:
+        indexing_pipeline.run(sources)
     return document_store
 
+def already_lancedb_existing():
+    uri = config["DOC_STORE"]["PATH"]
+    table = config["DOC_STORE"]["TABLE_NAME"]
+    db = lancedb.connect(uri)
+    if table in db.table_names():
+        # Document store already existing
+        return True
+    return False
 
-def create_lancedb_document_store(user_roles: List[str]):
+def get_lancedb_doc_store():
+    uri = config["DOC_STORE"]["PATH"]
+    table = config["DOC_STORE"]["TABLE_NAME"]
     metadata_schema = pa.struct([("date_added", pa.string())])
     document_store = LanceDBDocumentStore(
-        database=config["DOC_STORE"]["PATH"],
-        table_name=config["DOC_STORE"]["TABLE_NAME"],
+        database=uri,
+        table_name=table,
         metadata_schema=metadata_schema,
         embedding_dims=config["EMBEDDINGS"]["DIM"],
     )
-    sources = get_sources_for_user_roles(user_roles)
+    return document_store
+
+def create_lancedb_document_store(user_roles: List[str]):
+    document_store = get_lancedb_doc_store()
+    sources_per_organization = get_sources_for_user_roles(user_roles)
     indexing_pipeline = Pipeline()
     document_writer = DocumentWriter(
         document_store=document_store, policy=DuplicatePolicy.OVERWRITE
@@ -99,7 +110,8 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.connect("splitter", "embedder")
     indexing_pipeline.connect("embedder", "writer")
 
-    indexing_pipeline.run(sources)
+    for sources in sources_per_organization:
+        indexing_pipeline.run(sources)
 
     return document_store
 

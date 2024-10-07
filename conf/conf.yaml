@@ -1,9 +1,13 @@
 DOC_SOURCES:
-  EL: "data/el"
-  SH: "data/sh"
+  EL: "data/EL/Gesetze"
+  SH: "data/SH"
 DOC_STORE:
+  TYPE: "lancedb"  # InMemory
   PATH: "lancedb"
   TABLE_NAME: "documents"
+RETRIEVER:
+  TYPE: "embedding" # embedding, bm25, hybrid
+  TOP_K: 5
 EMBEDDINGS:
   MODEL: ""
-  DIM: 384
+  DIM: 1024

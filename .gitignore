@@ -2,4 +2,6 @@ data
 venv
 .env
 __pychache__
-conf\local
+conf\local\*
+lancedb
+rag_pipeline.png

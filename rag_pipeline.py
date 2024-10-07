@@ -5,15 +5,19 @@ import streamlit as st
 from haystack import Pipeline
 from haystack.components.builders import AnswerBuilder, ChatPromptBuilder
 from haystack.components.generators.chat import OpenAIChatGenerator
-from haystack.components.retrievers.in_memory import InMemoryBM25Retriever
+from haystack.components.retrievers.in_memory import InMemoryBM25Retriever, InMemoryEmbeddingRetriever
+from lancedb_haystack import LanceDBEmbeddingRetriever, LanceDBFTSRetriever
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from haystack.utils import Secret
-
+from utils import config_loader
+from document_storrage import create_inmemory_document_store, create_lancedb_document_store, already_lancedb_existing, get_lancedb_doc_store
+from typing import List
 language = "German"
 
 
 class SHRAGPipeline:
-    def __init__(self, document_store) -> None:
+    def __init__(self, user_roles: List[str]) -> None:
+        self.config = config_loader('conf/conf.yaml')
         self.user_prompt_template = (
             "Context information is below. \n"
             "---------------------\n"
@@ -38,7 +42,7 @@ class SHRAGPipeline:
         )
         self.messages = [system_message, ChatMessage.from_user(self.user_prompt_template)]
 
-        retriever = InMemoryBM25Retriever(document_store=document_store, top_k=5)
+        retriever = self._get_retriever(user_roles)
         prompt_builder = ChatPromptBuilder(template=self.messages)
         llm = OpenAIChatGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"), streaming_callback=self.streamlit_write_streaming_chunk)
         llm.client._client = httpx.Client(proxy=os.environ.get("PROXY_URL"))
@@ -56,6 +60,36 @@ class SHRAGPipeline:
         self.rag_pipeline = rag_pipeline
 
         rag_pipeline.draw("./rag_pipeline.png")
+
+    def _get_retriever(self, user_roles):
+        organization_filter = self._user_roles_to_filter(user_roles)
+        top_k = self.config["RETRIEVER"]["TOP_K"]
+        retriever_type = self.config["RETRIEVER"]["TYPE"]
+        doc_store_type = self.config["DOC_STORE"]["TYPE"]
+        if doc_store_type.lower() == 'inmemory':
+            doc_store = create_inmemory_document_store(user_roles)
+            if retriever_type.lower() == 'embedding':
+                return InMemoryEmbeddingRetriever(document_store=doc_store, top_k=top_k, filters=organization_filter)
+            elif retriever_type.lower() == 'bm25':
+                return InMemoryBM25Retriever(document_store=doc_store, top_k=top_k, filters=organization_filter)
+            else:
+                raise ValueError(f"Unsupported retriever {retriever_type} for {doc_store_type} document store.")
+        elif doc_store_type.lower() == 'lancedb':
+            if already_lancedb_existing():
+                doc_store = get_lancedb_doc_store()
+            else:
+                doc_store = create_lancedb_document_store(user_roles)
+            if retriever_type.lower() == 'embedding':
+                return LanceDBEmbeddingRetriever(document_store=doc_store, top_k=top_k, filters=organization_filter)
+            elif retriever_type.lower() == 'bm25':
+                return LanceDBFTSRetriever(document_store=doc_store, top_k=top_k, filters=organization_filter)
+            else:
+                raise ValueError(f"Unsupported retriever {retriever_type} for {doc_store_type} document store.")
+        else:
+            raise ValueError(f"Unsupported DocStore type {doc_store_type}.")
+
+    def _user_roles_to_filter(self, user_roles: List[str]):
+        return {"field": "organization", "operator": "in", "value": user_roles}
 
     def query(self, question: str) -> str:
          # Create a new Streamlit container for the AI's response.
