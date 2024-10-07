@@ -1,0 +1,9 @@
+DOC_SOURCES:
+  EL: "data/el"
+  SH: "data/sh"
+DOC_STORE:
+  PATH: "lancedb"
+  TABLE_NAME: "documents"
+EMBEDDINGS:
+  MODEL: ""
+  DIM: 384
