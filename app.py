@@ -4,26 +4,35 @@ from dotenv import load_dotenv
 from document_storrage import create_inmemory_document_store
 from rag_pipeline import SHRAGPipeline
 from collections import defaultdict
+import streamlit_authenticator as stauth
+from utils import config_loader
 
 load_dotenv()
 
-TITLE_NAME = 'Sozialhilfe RAG Chat Bot'
 UI_RENDERED_MESSAGES = 'ui_rendered_messages'
 CHAT_HISTORY = 'chat_history'
 CONVERSATIONAL_PIPELINE = 'conversational_pipeline'
 RELEVANT_DOCUMENTS = 'None'
+TITLE_NAME = "Data Alchemy RAG Bot"
 
+login_config = config_loader('conf/local/users.yaml')
+st.set_page_config(page_title=TITLE_NAME)
+authenticator = stauth.Authenticate(
+        **login_config
+    )
 
 def main():
     """
         Render the retrieval augmented generation (RAG) chatbot application.
     """
+    authentication()
     config = load_config()
     initialize_session_state(config)
     setup_page()
     render_chat_history()
     manage_chat()
     render_debug_section()
+    render_footer()
 
 
 def load_config():
@@ -34,22 +43,37 @@ def load_config():
         dict: Configuration dictionary containing title name,
               UI rendered messages, chat history, and conversational pipeline instance.
     """
-    document_store = create_inmemory_document_store()
     return {
-        TITLE_NAME: 'Sozialhilfe RAG Chat Bot',
         UI_RENDERED_MESSAGES: [],
         CHAT_HISTORY: [],
-        CONVERSATIONAL_PIPELINE: SHRAGPipeline(document_store),
         RELEVANT_DOCUMENTS: []
     }
+    
 
 
 def setup_page():
     """
         Set Streamlit page configuration and title.
     """
-    st.set_page_config(page_title=st.session_state[TITLE_NAME])
-    st.title(st.session_state[TITLE_NAME])
+    if st.session_state['authentication_status']:
+        authenticator.logout()
+        st.title(TITLE_NAME)
+        st.subheader(f"Sources: {", ".join(st.session_state["roles"])}")
+        st.write(f'Welcome *{st.session_state["name"]}*')
+        document_store = create_inmemory_document_store(st.session_state["roles"])
+        st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(document_store)
+    elif st.session_state['authentication_status'] is False:
+        st.error('Username/password is incorrect')
+    elif st.session_state['authentication_status'] is None:
+        st.warning('Please enter your username and password')
+    
+
+def authentication():
+    try:
+        authenticator.login()
+    except stauth.LoginError as e:
+        st.error(e)
+
 
 
 def initialize_session_state(config):
@@ -118,6 +142,11 @@ def render_debug_section():
                     st.markdown(f"**Content:** {doc['content']}")
                     st.markdown("---")
 
+def render_footer():
+    footer_html = """<div style='text-align: center;'>
+    <p>Developed with ❤️ by Data Alchemy Team</p>
+    </div>"""
+    st.markdown(footer_html, unsafe_allow_html=True)
 
 if __name__ == '__main__':
     main()

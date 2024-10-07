@@ -3,3 +3,7 @@ python-dotenv
 pdfminer.six
 streamlit
 sentence-transformers>=3.0.0
+streamlit-authenticator
+python-docx
+lancedb-haystack
+fastembed-haystack
