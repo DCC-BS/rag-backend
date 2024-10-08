@@ -1,9 +1,10 @@
+from collections import defaultdict
+
 import streamlit as st
+import streamlit_authenticator as stauth
 from dotenv import load_dotenv
 
 from rag_pipeline import SHRAGPipeline
-from collections import defaultdict
-import streamlit_authenticator as stauth
 from utils import config_loader
 
 load_dotenv()
@@ -57,9 +58,9 @@ def setup_page():
     if st.session_state['authentication_status']:
         authenticator.logout()
         st.title(TITLE_NAME)
-        st.subheader(f"Sources: {", ".join(st.session_state["organizations"])}")
+        st.subheader(f"Sources: {", ".join(st.session_state["roles"])}")
         st.write(f'Welcome *{st.session_state["name"]}*')
-        st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(st.session_state["organizations"])
+        st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(st.session_state["roles"])
     elif st.session_state['authentication_status'] is False:
         st.error('Username/password is incorrect')
     elif st.session_state['authentication_status'] is None:

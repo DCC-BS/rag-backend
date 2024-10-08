@@ -1,45 +1,69 @@
-from typing import List
+from typing import Dict, List, Tuple
 
 import pyarrow as pa
 from haystack import Pipeline
 from haystack.components.converters import DOCXToDocument, PDFMinerToDocument
+from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.joiners.document_joiner import DocumentJoiner
 from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.in_memory import InMemoryDocumentStore
 from haystack.document_stores.types import DuplicatePolicy
-from lancedb_haystack import LanceDBDocumentStore
-from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.utils import Secret
+from lancedb_haystack import LanceDBDocumentStore
+
 import lancedb
-# from embedding import get_document_embedder
 from utils import config_loader, find_files
 
 config = config_loader("conf/conf.yaml")
 
+ROLE_SOZIALHILFE = "Sozialhilfe"
+ROLE_ERGANZUNGSLEISTUNGEN = "Ergänzungsleistungen"
+DOC_TYPE_PDF = ".pdf"
+DOC_TYPE_DOCX = ".docx"
 
-def get_sources_for_user_roles(user_roles: List[str]):
-    sources_per_organization = []
 
-    def _add_files(base_folder: str):
-        docs = find_files(base_folder)
-        pdfs = docs.get(".pdf", [])
-        docxs = docs.get(".docx", [])
-        return pdfs, docxs
+def get_sources_for_user_roles(user_roles: List[str]) -> Dict[str, Dict]:
+    """
+    Retrieve document sources based on user roles.
 
-    if "Sozialhilfe" in user_roles:
-        pdf_sources, word_sources = _add_files(config["DOC_SOURCES"]["SH"])
-        sources_per_organization.append({
-            "pdf_converter": {"sources": pdf_sources, 'meta':{'organization': 'Sozialhilfe'}},
-            "word_converter": {"sources": word_sources, 'meta':{'organization': 'Sozialhilfe'}}
-        })
-    if "Ergänzungsleistungen" in user_roles:
-        pdf_sources, word_sources = _add_files(config["DOC_SOURCES"]["EL"])
-        sources_per_organization.append({
-            "pdf_converter": {"sources": pdf_sources, 'meta':{'organization': 'Ergänzungsleistungen'}},
-            "word_converter": {"sources": word_sources, 'meta':{'organization': 'Ergänzungsleistungen'}}
-        })
-    return sources_per_organization
+    Args:
+        user_roles (List[str]): List of user roles.
+
+    Returns:
+        Dict[str, Dict]: Dictionary containing PDF and Word document sources.
+    """
+    pdf_docs: Dict[str, List] = {"sources": [], "meta": {"organization": []}}
+    word_docs: Dict[str, List] = {"sources": [], "meta": {"organization": []}}
+
+    role_config = {
+        ROLE_SOZIALHILFE: config["DOC_SOURCES"]["SH"],
+        ROLE_ERGANZUNGSLEISTUNGEN: config["DOC_SOURCES"]["EL"],
+    }
+
+    for role, folder in role_config.items():
+        if role in user_roles:
+            _process_docs_for_role(role, folder, pdf_docs, word_docs)
+
+    return {"pdf_converter": pdf_docs, "word_converter": word_docs}
+
+
+def _add_files(base_folder: str) -> Tuple[List[str], List[str]]:
+    docs = find_files(base_folder)
+    return docs.get(DOC_TYPE_PDF, []), docs.get(DOC_TYPE_DOCX, [])
+
+
+def _process_docs_for_role(
+    role: str, base_folder: str, pdf_docs: dict, word_docs: dict
+):
+    pdf_sources, word_sources = _add_files(base_folder)
+    if pdf_sources:
+        pdf_docs["sources"].extend(pdf_sources)
+        pdf_docs["meta"]["organization"].extend([role] * len(pdf_sources))
+    if word_sources:
+        word_docs["sources"].extend(word_sources)
+        word_docs["meta"]["organization"].extend([role] * len(word_sources))
+
 
 def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentStore:
     sources_per_organization = get_sources_for_user_roles(user_roles)
@@ -66,6 +90,7 @@ def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentSto
         indexing_pipeline.run(sources)
     return document_store
 
+
 def already_lancedb_existing():
     uri = config["DOC_STORE"]["PATH"]
     table = config["DOC_STORE"]["TABLE_NAME"]
@@ -74,6 +99,7 @@ def already_lancedb_existing():
         # Document store already existing
         return True
     return False
+
 
 def get_lancedb_doc_store():
     uri = config["DOC_STORE"]["PATH"]
@@ -87,9 +113,10 @@ def get_lancedb_doc_store():
     )
     return document_store
 
+
 def create_lancedb_document_store(user_roles: List[str]):
     document_store = get_lancedb_doc_store()
-    sources_per_organization = get_sources_for_user_roles(user_roles)
+    sources = get_sources_for_user_roles(user_roles)
     indexing_pipeline = Pipeline()
     document_writer = DocumentWriter(
         document_store=document_store, policy=DuplicatePolicy.OVERWRITE
@@ -101,7 +128,12 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.add_component(
         "splitter", DocumentSplitter(split_by="page", split_length=1)
     )
-    indexing_pipeline.add_component("embedder", SentenceTransformersDocumentEmbedder(model="BAAI/bge-m3", token=Secret.from_env_var("HF_API_TOKEN")))
+    indexing_pipeline.add_component(
+        "embedder",
+        SentenceTransformersDocumentEmbedder(
+            model="BAAI/bge-m3", token=Secret.from_env_var("HF_API_TOKEN")
+        ),
+    )
     indexing_pipeline.add_component("writer", document_writer)
     indexing_pipeline.connect("pdf_converter", "joiner")
     indexing_pipeline.connect("word_converter", "joiner")
@@ -110,12 +142,13 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.connect("splitter", "embedder")
     indexing_pipeline.connect("embedder", "writer")
 
-    for sources in sources_per_organization:
-        indexing_pipeline.run(sources)
+    indexing_pipeline.run(sources)
 
     return document_store
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv()
     create_lancedb_document_store("Sozialhilfe")
