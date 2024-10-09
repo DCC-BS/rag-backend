@@ -1,5 +1,5 @@
 DOC_SOURCES:
-  EL: "data/EL/Gesetze"
+  EL: "data/EL"
   SH: "data/SH"
 DOC_STORE:
   TYPE: "lancedb"  # InMemory
