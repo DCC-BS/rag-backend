@@ -115,7 +115,6 @@ class SHRAGPipeline:
                 },
             }
         )
-        print(response)
         if 'answers' in response["answer_builder"]:
             response_content = response["answer_builder"]['answers'][0].data
             relevant_documents = response["answer_builder"]['answers'][0].documents
