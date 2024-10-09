@@ -53,8 +53,8 @@ def setup_page():
     """
     Set Streamlit page configuration and title.
     """
+    st.markdown("Developed with :heart: by Data Alchemy Team")
     st.title(TITLE_NAME)
-    render_header()
     if st.session_state["authentication_status"]:
         authenticator.logout()
         st.subheader(f"Sources: {", ".join(st.session_state["roles"])}")
@@ -149,27 +149,6 @@ def render_debug_section():
                     # st.markdown(f"**Relevance Score:** {doc['relevance_score']:.4f}")
                     st.markdown(f"**Content:** {doc['content']}")
                     st.markdown("---")
-
-
-def render_header():
-    header_html = """
-        <style>
-            .header {
-                position: fixed;
-                left: 0;
-                top: 0;
-                width: 100%;
-                text-align: center;
-                padding: 10px;
-                font-size: 14px;
-                z-index: 1000;
-            }
-        </style>
-        <div class="header">
-            <p>Developed with ❤️ by Data Alchemy Team</p>
-        </div>
-    """
-    st.markdown(header_html, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
