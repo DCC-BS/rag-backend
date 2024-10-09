@@ -33,8 +33,8 @@ def get_sources_for_user_roles(user_roles: List[str]) -> Dict[str, Dict]:
     Returns:
         Dict[str, Dict]: Dictionary containing PDF and Word document sources.
     """
-    pdf_docs: Dict[str, List] = {"sources": [], "meta": {"organization": []}}
-    word_docs: Dict[str, List] = {"sources": [], "meta": {"organization": []}}
+    pdf_docs: Dict[str, List] = {"sources": [], "meta": []}
+    word_docs: Dict[str, List] = {"sources": [], "meta": []}
 
     role_config = {
         ROLE_SOZIALHILFE: config["DOC_SOURCES"]["SH"],
@@ -59,14 +59,18 @@ def _process_docs_for_role(
     pdf_sources, word_sources = _add_files(base_folder)
     if pdf_sources:
         pdf_docs["sources"].extend(pdf_sources)
-        pdf_docs["meta"]["organization"].extend([role] * len(pdf_sources))
+        pdf_docs["meta"].extend(
+            [{"organization": role, "file_path": path} for path in pdf_sources]
+        )
     if word_sources:
         word_docs["sources"].extend(word_sources)
-        word_docs["meta"]["organization"].extend([role] * len(word_sources))
+        word_docs["meta"].extend(
+            [{"organization": role, "file_path": path} for path in word_sources]
+        )
 
 
 def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentStore:
-    sources_per_organization = get_sources_for_user_roles(user_roles)
+    sources = get_sources_for_user_roles(user_roles)
     indexing_pipeline = Pipeline()
     document_store = InMemoryDocumentStore()
     document_writer = DocumentWriter(
@@ -86,8 +90,7 @@ def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentSto
     indexing_pipeline.connect("cleaner", "splitter")
     indexing_pipeline.connect("splitter", "writer")
 
-    for sources in sources_per_organization:
-        indexing_pipeline.run(sources)
+    indexing_pipeline.run(sources)
     return document_store
 
 
@@ -104,7 +107,13 @@ def already_lancedb_existing():
 def get_lancedb_doc_store():
     uri = config["DOC_STORE"]["PATH"]
     table = config["DOC_STORE"]["TABLE_NAME"]
-    metadata_schema = pa.struct([("date_added", pa.string())])
+    metadata_schema = pa.struct(
+        [
+            ("organization", pa.string()),
+            ("file_path", pa.string()),
+            ("page_number", pa.string()),
+        ]
+    )
     document_store = LanceDBDocumentStore(
         database=uri,
         table_name=table,

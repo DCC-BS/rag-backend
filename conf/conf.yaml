@@ -6,7 +6,7 @@ DOC_STORE:
   PATH: "lancedb"
   TABLE_NAME: "documents"
 RETRIEVER:
-  TYPE: "embedding" # embedding, bm25, hybrid
+  TYPE: "bm25" # embedding, bm25, hybrid
   TOP_K: 5
 EMBEDDINGS:
   MODEL: ""

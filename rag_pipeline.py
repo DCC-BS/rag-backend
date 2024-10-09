@@ -44,7 +44,11 @@ class SHRAGPipeline:
 
         retriever = self._get_retriever(user_roles)
         prompt_builder = ChatPromptBuilder(template=self.messages)
-        llm = OpenAIChatGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"), streaming_callback=self.streamlit_write_streaming_chunk)
+        llm = OpenAIChatGenerator(
+            api_key=Secret.from_env_var("OPENAI_API_KEY"),
+            streaming_callback=self.streamlit_write_streaming_chunk, 
+            api_base_url=os.getenv("API_BASE_URL")
+            )
         llm.client._client = httpx.Client(proxy=os.environ.get("PROXY_URL"))
         answer_builder = AnswerBuilder()
 
@@ -59,7 +63,6 @@ class SHRAGPipeline:
         rag_pipeline.connect("retriever", "answer_builder.documents")
         self.rag_pipeline = rag_pipeline
 
-        rag_pipeline.draw("./rag_pipeline.png")
 
     def _get_retriever(self, user_roles):
         organization_filter = self._user_roles_to_filter(user_roles)
@@ -89,7 +92,7 @@ class SHRAGPipeline:
             raise ValueError(f"Unsupported DocStore type {doc_store_type}.")
 
     def _user_roles_to_filter(self, user_roles: List[str]):
-        return {"field": "organization", "operator": "in", "value": user_roles}
+        return {"field": "meta.organization", "operator": "in", "value": user_roles}
 
     def query(self, question: str) -> str:
          # Create a new Streamlit container for the AI's response.
@@ -97,7 +100,7 @@ class SHRAGPipeline:
 
         # Initialize an empty list for response tokens.
         self.tokens = []
-
+        # TODO: Needs adjustment to work with embeddings (add query embedding)
         response = self.rag_pipeline.run(
             data={
                 "retriever": {"query": question},
@@ -108,6 +111,7 @@ class SHRAGPipeline:
                 },
             }
         )
+        print(response)
         if 'answers' in response["answer_builder"]:
             response_content = response["answer_builder"]['answers'][0].data
             relevant_documents = response["answer_builder"]['answers'][0].documents

@@ -1,0 +1,32 @@
+credentials:
+  usernames:
+    yanick:
+      email: yanick.schraner@bs.ch
+      failed_login_attempts: 0
+      name: Yanick Schraner
+      password: admin
+      logged_in: False
+      roles:
+      - admin
+      - Sozialhilfe
+      - Ergänzungsleistungen
+    asb:
+      email: asb@bs.ch
+      failed_login_attempts: 0
+      name: Amt für Sozialbeiträge
+      password: ASB-BOT
+      logged_in: False
+      roles:
+      - Ergänzungsleistungen
+    sh:
+      email: sh@bs.ch
+      failed_login_attempts: 0
+      name: Amt für Sozialhilfe
+      password: SH-BOT
+      logged_in: False
+      roles:
+      - Sozialhilfe
+cookie:
+  expiry_days: 30
+  key: Difference-Blow-Man-Taste
+  name: rag_auth_cookie
