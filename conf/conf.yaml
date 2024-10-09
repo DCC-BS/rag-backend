@@ -11,3 +11,8 @@ RETRIEVER:
 EMBEDDINGS:
   MODEL: ""
   DIM: 1024
+LLM:
+  MODEL: "phi3.5:3.8b-mini-instruct-q4_K_M"
+  GENERATION_ARGS:
+    temperature: 0.1
+    num_ctx: 10000

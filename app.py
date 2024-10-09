@@ -54,7 +54,7 @@ def setup_page():
     Set Streamlit page configuration and title.
     """
     st.title(TITLE_NAME)
-    render_footer()
+    render_header()
     if st.session_state["authentication_status"]:
         authenticator.logout()
         st.subheader(f"Sources: {", ".join(st.session_state["roles"])}")
@@ -132,13 +132,13 @@ def render_debug_section():
         for document in st.session_state[RELEVANT_DOCUMENTS]:
             doc_path = document.meta["file_path"]
             doc_page = document.meta["page_number"]
-            doc_relevance_score = document.score
+            # doc_relevance_score = document.score
             content = document.content
             relevant_docs[doc_path].append(
                 {
                     "page": doc_page,
                     "content": content,
-                    "relevance_score": doc_relevance_score,
+                    # "relevance_score": doc_relevance_score,
                 }
             )
 
@@ -146,28 +146,30 @@ def render_debug_section():
             with st.expander(f"File: {file_path}"):
                 for doc in docs:
                     st.markdown(f"**Page:** {doc['page']}")
-                    st.markdown(f"**Relevance Score:** {doc['relevance_score']:.4f}")
+                    # st.markdown(f"**Relevance Score:** {doc['relevance_score']:.4f}")
                     st.markdown(f"**Content:** {doc['content']}")
                     st.markdown("---")
 
 
-def render_footer():
-    footer_html = """
-    <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        text-align: center;
-        padding: 10px;
-        font-size: 14px;
-    }
-    </style>
-    <div class="footer">
-        <p>Developed with ❤️ by Data Alchemy Team</p>
-    </div>"""
-    st.markdown(footer_html, unsafe_allow_html=True)
+def render_header():
+    header_html = """
+        <style>
+            .header {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                text-align: center;
+                padding: 10px;
+                font-size: 14px;
+                z-index: 1000;
+            }
+        </style>
+        <div class="header">
+            <p>Developed with ❤️ by Data Alchemy Team</p>
+        </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

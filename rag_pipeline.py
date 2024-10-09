@@ -4,7 +4,7 @@ import httpx
 import streamlit as st
 from haystack import Pipeline
 from haystack.components.builders import AnswerBuilder, ChatPromptBuilder
-from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack_integrations.components.generators.ollama import OllamaChatGenerator
 from haystack.components.retrievers.in_memory import InMemoryBM25Retriever, InMemoryEmbeddingRetriever
 from lancedb_haystack import LanceDBEmbeddingRetriever, LanceDBFTSRetriever
 from haystack.dataclasses import ChatMessage, StreamingChunk
@@ -44,12 +44,16 @@ class SHRAGPipeline:
 
         retriever = self._get_retriever(user_roles)
         prompt_builder = ChatPromptBuilder(template=self.messages)
-        llm = OpenAIChatGenerator(
-            api_key=Secret.from_env_var("OPENAI_API_KEY"),
+        llm = OllamaChatGenerator(
             streaming_callback=self.streamlit_write_streaming_chunk, 
-            api_base_url=os.getenv("API_BASE_URL")
+            url=os.getenv("API_BASE_URL"),
+            model=self.config["LLM"]["MODEL"],
+            generation_kwargs={
+                **self.config["LLM"]["GENERATION_ARGS"]
+            }
             )
-        llm.client._client = httpx.Client(proxy=os.environ.get("PROXY_URL"))
+        if len(os.environ.get("PROXY_URL")) > 0:
+            llm.client._client = httpx.Client(proxy=os.environ.get("PROXY_URL"))
         answer_builder = AnswerBuilder()
 
         rag_pipeline = Pipeline()

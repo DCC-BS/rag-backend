@@ -111,7 +111,7 @@ def get_lancedb_doc_store():
         [
             ("organization", pa.string()),
             ("file_path", pa.string()),
-            ("page_number", pa.string()),
+            ("page_number", pa.int32()),
         ]
     )
     document_store = LanceDBDocumentStore(
@@ -152,6 +152,9 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.connect("embedder", "writer")
 
     indexing_pipeline.run(sources)
+
+    table = document_store.db.open_table(document_store._table_name)
+    table.create_fts_index("content", replace=True)
 
     return document_store
 

@@ -7,3 +7,4 @@ streamlit-authenticator
 python-docx
 lancedb-haystack
 fastembed-haystack
+ollama-haystack
