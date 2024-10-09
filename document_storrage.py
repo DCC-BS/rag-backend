@@ -1,5 +1,5 @@
 from typing import Dict, List, Tuple
-
+import time
 import pyarrow as pa
 from haystack import Pipeline
 from haystack.components.converters import DOCXToDocument, PDFMinerToDocument
@@ -153,6 +153,9 @@ def create_lancedb_document_store(user_roles: List[str]):
 
     indexing_pipeline.run(sources)
 
+    # Wait for file locks to be freed
+    time.sleep(5)
+
     table = document_store.db.open_table(document_store._table_name)
     table.create_fts_index("content", replace=True)
 
@@ -163,4 +166,4 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-    create_lancedb_document_store("Sozialhilfe")
+    create_lancedb_document_store(["Sozialhilfe", "Ergänzungsleistungen"])

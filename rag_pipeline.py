@@ -27,6 +27,7 @@ class SHRAGPipeline:
             "---------------------\n"
             "Given the context information and not prior knowledge, "
             "answer the query. \n"
+            "If there is no context information say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'"
             "Question: {{question}} \n"
             "Answer: "
         )
@@ -37,6 +38,7 @@ class SHRAGPipeline:
             "For every question you retrieve context information to create a truthful answer."
             "If you can not find the answer in the context information,"
             "just say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'."
+            "You must not answer with other information than that provided in the context."
             "You always answer in {{language}}."
         )
         )
