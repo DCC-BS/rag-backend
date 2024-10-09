@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 
 import streamlit as st
 import streamlit_authenticator as stauth
@@ -6,6 +7,7 @@ from dotenv import load_dotenv
 
 from rag_pipeline import SHRAGPipeline
 from utils import config_loader
+import pandas as pd
 
 load_dotenv()
 
@@ -16,6 +18,7 @@ RELEVANT_DOCUMENTS = "None"
 TITLE_NAME = "Data Alchemy RAG Bot"
 
 login_config = config_loader("conf/local/users.yaml")
+config = config_loader("conf/conf.yaml")
 st.set_page_config(page_title=TITLE_NAME)
 authenticator = stauth.Authenticate(**login_config)
 
@@ -30,6 +33,7 @@ def main():
     setup_page()
     render_chat_history()
     manage_chat()
+    render_feedback_section()
     render_debug_section()
 
 
@@ -110,6 +114,69 @@ def manage_chat():
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
         )
+
+
+
+
+def render_feedback_section():
+    """
+    Render a feedback section for the user to provide feedback on the AI response.
+    """
+    if (
+        st.session_state[UI_RENDERED_MESSAGES]
+        and st.session_state[UI_RENDERED_MESSAGES][-1]["role"] == "assistant"
+    ):
+        with st.expander("Provide Feedback", expanded=True):
+            col1, col2 = st.columns([1, 3])
+            
+            with col1:
+                is_helpful = st.radio("Was this helpful?", ["Yes", "No"], key="feedback_helpful")
+            
+            feedback_data = {
+                "helpful": is_helpful,
+                "reason": "",
+                "feedback": "",
+                "query": st.session_state[UI_RENDERED_MESSAGES][-2]["content"],
+                "response": st.session_state[UI_RENDERED_MESSAGES][-1]["content"],
+                "user": st.session_state["name"],
+                "model": config["LLM"]["MODEL"],
+                "retriever": config["RETRIEVER"],
+            }
+            
+            if is_helpful == "No":
+                with col2:
+                    feedback_data["reason"] = st.selectbox(
+                        "Please select the reason why it was not helpful:",
+                        [
+                            "Too long",
+                            "Incorrect answer",
+                            "Context did not contain the answer",
+                            "Context had the answer but AI did not find it",
+                            "Other",
+                        ],
+                        key="feedback_reason",
+                    )
+                    feedback_data["feedback"] = st.text_area("Additional feedback (optional):")
+            
+            if st.button("Submit Feedback", key="feedback_submit"):
+                save_feedback(feedback_data)
+                st.success("Thank you for your feedback!")
+
+def save_feedback(feedback_data):
+    """
+    Save feedback data to a CSV file.
+    """
+    feedback_file = "feedback.csv"
+    
+    if not os.path.exists(feedback_file):
+        df = pd.DataFrame(columns=feedback_data.keys())
+    else:
+        df = pd.read_csv(feedback_file)
+    
+    new_row = pd.DataFrame([feedback_data])
+    df = pd.concat([df, new_row], ignore_index=True)
+    df.to_csv(feedback_file, index=False)
+
 
 
 def render_chat_history():

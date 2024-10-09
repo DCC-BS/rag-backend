@@ -12,7 +12,7 @@ EMBEDDINGS:
   MODEL: ""
   DIM: 1024
 LLM:
-  MODEL: "phi3.5:3.8b-mini-instruct-q4_K_M"
+  MODEL: "gemma2:27b" # "phi3.5:3.8b-mini-instruct-fp16" # "llama3.1:70b" # "phi3.5:3.8b-mini-instruct-q4_K_M"
   GENERATION_ARGS:
-    temperature: 0.1
+    temperature: 0.2
     num_ctx: 10000

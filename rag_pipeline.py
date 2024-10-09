@@ -27,19 +27,17 @@ class SHRAGPipeline:
             "---------------------\n"
             "Given the context information and not prior knowledge, "
             "answer the query. \n"
-            "If there is no context information say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'"
+            " If you can not answer the question based on the information provided as context,"
+            " say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'. \n"
             "Question: {{question}} \n"
             "Answer: "
         )
         
         system_message = ChatMessage.from_system((
-            "You are an subject matter expert at welfare regulations for the government in Basel, Switzerland."
-            "You act as an assistant for question-answering tasks."
-            "For every question you retrieve context information to create a truthful answer."
-            "If you can not find the answer in the context information,"
-            "just say 'Entschuldigung, ich kann die Antwort auf deine Frage in meinen Dokumenten nicht finden.'."
-            "You must not answer with other information than that provided in the context."
-            "You always answer in {{language}}."
+            "You are an subject matter expert at welfare regulations for the government in Basel, Switzerland. \n"
+            " You act as an assistant for question-answering tasks. \n"
+            " For every question you retrieve context information to create a truthful answer. \n"
+            " You always answer in {{language}}."
         )
         )
         self.messages = [system_message, ChatMessage.from_user(self.user_prompt_template)]
@@ -109,7 +107,7 @@ class SHRAGPipeline:
         # TODO: Needs adjustment to work with embeddings (add query embedding)
         response = self.rag_pipeline.run(
             data={
-                "retriever": {"query": question},
+                "retriever": {"query": question, "top_k": self.config["RETRIEVER"]["TOP_K"]},
                 "answer_builder": {"query": question},
                 "prompt_builder": {
                     "template_variables": {"question": question, "language": language},
@@ -117,7 +115,6 @@ class SHRAGPipeline:
                 },
             }
         )
-        print(response)
         if 'answers' in response["answer_builder"]:
             response_content = response["answer_builder"]['answers'][0].data
             relevant_documents = response["answer_builder"]['answers'][0].documents
