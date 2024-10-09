@@ -5,6 +5,9 @@ DOC_STORE:
   TYPE: "lancedb"  # InMemory
   PATH: "lancedb"
   TABLE_NAME: "documents"
+  SPLIT_SIZE: 1
+  SPLIT_OVERLAP: 0
+  SPLIT_METHOD: "page" # Options: "sentence", "paragraph", "word", "page"
 RETRIEVER:
   TYPE: "bm25" # embedding, bm25, hybrid
   TOP_K: 5

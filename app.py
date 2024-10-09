@@ -116,8 +116,6 @@ def manage_chat():
         )
 
 
-
-
 def render_feedback_section():
     """
     Render a feedback section for the user to provide feedback on the AI response.
@@ -128,10 +126,12 @@ def render_feedback_section():
     ):
         with st.expander("Provide Feedback", expanded=True):
             col1, col2 = st.columns([1, 3])
-            
+
             with col1:
-                is_helpful = st.radio("Was this helpful?", ["Yes", "No"], key="feedback_helpful")
-            
+                is_helpful = st.radio(
+                    "Was this helpful?", ["Yes", "No"], key="feedback_helpful"
+                )
+
             feedback_data = {
                 "helpful": is_helpful,
                 "reason": "",
@@ -141,8 +141,9 @@ def render_feedback_section():
                 "user": st.session_state["name"],
                 "model": config["LLM"]["MODEL"],
                 "retriever": config["RETRIEVER"],
+                "doc_store": config["DOC_STORE"]
             }
-            
+
             if is_helpful == "No":
                 with col2:
                     feedback_data["reason"] = st.selectbox(
@@ -156,27 +157,29 @@ def render_feedback_section():
                         ],
                         key="feedback_reason",
                     )
-                    feedback_data["feedback"] = st.text_area("Additional feedback (optional):")
-            
+                    feedback_data["feedback"] = st.text_area(
+                        "Additional feedback (optional):"
+                    )
+
             if st.button("Submit Feedback", key="feedback_submit"):
                 save_feedback(feedback_data)
                 st.success("Thank you for your feedback!")
+
 
 def save_feedback(feedback_data):
     """
     Save feedback data to a CSV file.
     """
     feedback_file = "feedback.csv"
-    
+
     if not os.path.exists(feedback_file):
         df = pd.DataFrame(columns=feedback_data.keys())
     else:
-        df = pd.read_csv(feedback_file)
-    
+        df = pd.read_csv(feedback_file, encoding='utf-8')
+
     new_row = pd.DataFrame([feedback_data])
     df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv(feedback_file, index=False)
-
+    df.to_csv(feedback_file, index=False, encoding='utf-8')
 
 
 def render_chat_history():
