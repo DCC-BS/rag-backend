@@ -57,7 +57,7 @@ def setup_page():
     st.title(TITLE_NAME)
     if st.session_state["authentication_status"]:
         authenticator.logout()
-        st.subheader(f"Sources: {", ".join(st.session_state["roles"])}")
+        st.subheader(f"Sources: {', '.join(st.session_state['roles'])}")
         st.write(f'Welcome *{st.session_state["name"]}*')
         st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
             st.session_state["roles"]
