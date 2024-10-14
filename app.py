@@ -124,12 +124,12 @@ def render_feedback_section():
         st.session_state[UI_RENDERED_MESSAGES]
         and st.session_state[UI_RENDERED_MESSAGES][-1]["role"] == "assistant"
     ):
-        with st.expander("Provide Feedback", expanded=True):
+        with st.expander("Feedback geben", expanded=True):
             col1, col2 = st.columns([1, 3])
 
             with col1:
                 is_helpful = st.radio(
-                    "Was this helpful?", ["Yes", "No"], key="feedback_helpful"
+                    "War die Antwort hilfreich?", ["Yes", "No"], key="feedback_helpful"
                 )
 
             feedback_data = {
@@ -146,24 +146,26 @@ def render_feedback_section():
 
             if is_helpful == "No":
                 with col2:
-                    feedback_data["reason"] = st.selectbox(
-                        "Please select the reason why it was not helpful:",
+                    feedback_data["reason"] = st.multiselect(
+                        "Das ist schief gelaufen:",
                         [
-                            "Too long",
-                            "Incorrect answer",
-                            "Context did not contain the answer",
-                            "Context had the answer but AI did not find it",
-                            "Other",
+                            "Kontext enthielt die korrekte Antwort, AI fand diese nicht",
+                            "Kontext enthielt die korrekte Antwort nicht",
+                            "Falsche Antwort",
+                            "Antwort zu knapp / relevante Info weggelessen"
+                            "Antwort zu lange",
+                            "Anderes",
                         ],
                         key="feedback_reason",
+                        placeholder="Grund auswählen"
                     )
                     feedback_data["feedback"] = st.text_area(
-                        "Additional feedback (optional):"
+                        "Zusätzliches Feedback (optional):"
                     )
 
-            if st.button("Submit Feedback", key="feedback_submit"):
+            if st.button("Feedback senden", key="feedback_submit"):
                 save_feedback(feedback_data)
-                st.success("Thank you for your feedback!")
+                st.success("Danke für deinFeedback!")
 
 
 def save_feedback(feedback_data):
