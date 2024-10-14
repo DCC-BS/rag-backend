@@ -57,15 +57,15 @@ def setup_page():
     st.title(TITLE_NAME)
     if st.session_state["authentication_status"]:
         authenticator.logout()
-        st.subheader(f"Sources: {', '.join(st.session_state['roles'])}")
-        st.write(f'Welcome *{st.session_state["name"]}*')
+        st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
+        st.write(f'Hallo *{st.session_state["name"]}*')
         st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
             st.session_state["roles"]
         )
     elif st.session_state["authentication_status"] is False:
-        st.error("Username/password is incorrect")
+        st.error("Benutzername oder Passwort sind falsch")
     elif st.session_state["authentication_status"] is None:
-        st.warning("Please enter your username and password")
+        st.warning("Bitte Benutzername und Passwort eingeben")
 
 
 def authentication():
@@ -92,7 +92,7 @@ def manage_chat():
     Handle user interaction with the conversational AI and render
     the user query along with the AI response.
     """
-    if prompt := st.chat_input("What can we help you with?"):
+    if prompt := st.chat_input("Wie kann ich Dir heute helfen?"):
         # Render user message.
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -102,7 +102,7 @@ def manage_chat():
 
         # Render AI assistant's response.
         with st.chat_message("assistant"):
-            with st.spinner("Generating response . . ."):
+            with st.spinner("Antwort wird generiert . . ."):
                 response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(
                     prompt
                 )
@@ -126,7 +126,7 @@ def render_debug_section():
     Render a debug section showing relevant documents grouped by file path.
     """
     if st.session_state[RELEVANT_DOCUMENTS]:
-        st.markdown("#### Debug Section: Relevant Documents")
+        st.markdown("#### Folgende Dokumente wurden als Kontext vewrwendet:")
 
         relevant_docs = defaultdict(list)
         for document in st.session_state[RELEVANT_DOCUMENTS]:
@@ -145,9 +145,9 @@ def render_debug_section():
         for file_path, docs in relevant_docs.items():
             with st.expander(f"File: {file_path}"):
                 for doc in docs:
-                    st.markdown(f"**Page:** {doc['page']}")
-                    # st.markdown(f"**Relevance Score:** {doc['relevance_score']:.4f}")
-                    st.markdown(f"**Content:** {doc['content']}")
+                    st.markdown(f"**Seite:** {doc['page']}")
+                    # st.markdown(f"**Relevanz:** {doc['relevance_score']:.4f}")
+                    st.markdown(f"**Inhalt:** {doc['content']}")
                     st.markdown("---")
 
 
