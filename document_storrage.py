@@ -81,7 +81,7 @@ def create_inmemory_document_store(user_roles: List[str]) -> InMemoryDocumentSto
     indexing_pipeline.add_component("joiner", DocumentJoiner())
     indexing_pipeline.add_component("cleaner", DocumentCleaner())
     indexing_pipeline.add_component(
-        "splitter", DocumentSplitter(split_by="page", split_length=1)
+        "splitter", DocumentSplitter(split_by=config["DOC_STORE"]["SPLIT_METHOD"], split_length=config["DOC_STORE"]["SPLIT_SIZE"], split_overlap=config["DOC_STORE"]["SPLIT_OVERLAP"])
     )
     indexing_pipeline.add_component("writer", document_writer)
     indexing_pipeline.connect("pdf_converter", "joiner")
@@ -135,7 +135,7 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.add_component("joiner", DocumentJoiner())
     indexing_pipeline.add_component("cleaner", DocumentCleaner())
     indexing_pipeline.add_component(
-        "splitter", DocumentSplitter(split_by="page", split_length=1)
+        "splitter", DocumentSplitter(split_by=config["DOC_STORE"]["SPLIT_METHOD"], split_length=config["DOC_STORE"]["SPLIT_SIZE"], split_overlap=config["DOC_STORE"]["SPLIT_OVERLAP"])
     )
     indexing_pipeline.add_component(
         "embedder",
@@ -154,7 +154,7 @@ def create_lancedb_document_store(user_roles: List[str]):
     indexing_pipeline.run(sources)
 
     # Wait for file locks to be freed
-    time.sleep(5)
+    time.sleep(2)
 
     table = document_store.db.open_table(document_store._table_name)
     table.create_fts_index("content", replace=True)

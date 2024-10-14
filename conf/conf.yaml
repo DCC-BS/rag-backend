@@ -5,6 +5,9 @@ DOC_STORE:
   TYPE: "lancedb"  # InMemory
   PATH: "lancedb"
   TABLE_NAME: "documents"
+  SPLIT_SIZE: 1
+  SPLIT_OVERLAP: 0
+  SPLIT_METHOD: "page" # Options: "sentence", "paragraph", "word", "page"
 RETRIEVER:
   TYPE: "bm25" # embedding, bm25, hybrid
   TOP_K: 5
@@ -12,7 +15,7 @@ EMBEDDINGS:
   MODEL: ""
   DIM: 1024
 LLM:
-  MODEL: "phi3.5:3.8b-mini-instruct-q4_K_M"
+  MODEL: "gemma2:27b" # "phi3.5:3.8b-mini-instruct-fp16" # "llama3.1:70b" # "phi3.5:3.8b-mini-instruct-q4_K_M"
   GENERATION_ARGS:
-    temperature: 0.1
+    temperature: 0.2
     num_ctx: 10000
