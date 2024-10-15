@@ -6,8 +6,10 @@ import streamlit_authenticator as stauth
 from dotenv import load_dotenv
 
 from rag_pipeline import SHRAGPipeline
-from utils import config_loader
+from utils import config_loader, render_pdf, render_docx
 import pandas as pd
+
+
 
 load_dotenv()
 
@@ -107,9 +109,11 @@ def manage_chat():
         # Render AI assistant's response.
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
+                # st.write_stream(st.session_state[CONVERSATIONAL_PIPELINE].streamlit_write_streaming_chunk)
                 response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(
                     prompt
                 )
+                
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
@@ -205,11 +209,9 @@ def render_debug_section():
             doc_path = document.meta["file_path"]
             doc_page = document.meta["page_number"]
             # doc_relevance_score = document.score
-            content = document.content
             relevant_docs[doc_path].append(
                 {
                     "page": doc_page,
-                    "content": content,
                     # "relevance_score": doc_relevance_score,
                 }
             )
@@ -219,8 +221,19 @@ def render_debug_section():
                 for doc in docs:
                     st.markdown(f"**Seite:** {doc['page']}")
                     # st.markdown(f"**Relevanz:** {doc['relevance_score']:.4f}")
-                    st.markdown(f"**Inhalt:** {doc['content']}")
+                    render_page(file_path, doc['page'])
                     st.markdown("---")
+                    
+
+def render_page(file_path: str, page_number: int):
+    if file_path.endswith(".pdf"):
+        href = render_pdf(file_path, page_number)
+    elif file_path.endswith((".docx")):
+        href = render_docx(file_path, page_number)
+    else:
+        st.error("Unsupported file format. Only PDF and DOCX files are supported.")
+        return
+    st.markdown(href, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

@@ -7,3 +7,5 @@ streamlit-authenticator
 python-docx
 lancedb-haystack
 ollama-haystack
+PyPDF2
+mammoth

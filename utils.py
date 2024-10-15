@@ -2,10 +2,52 @@ import yaml
 from yaml.loader import SafeLoader
 import os
 
+import base64
+from PyPDF2 import PdfReader, PdfWriter
+from io import BytesIO
+
+from docx import Document
+import mammoth
+
 def config_loader(file_path: str):
     with open(file_path, encoding='utf-8') as file:
         return yaml.load(file, Loader=SafeLoader)
     
+def render_pdf(file_path: str, page_number: int) -> str:
+    if not os.path.exists(file_path):
+        raise ValueError(f"File path {file_path} does not exist")
+    
+    with open(file_path, "rb") as f:
+        pdf_reader = PdfReader(f)
+
+        if page_number < 1 or page_number > len(pdf_reader.pages):
+            raise ValueError(f"Invalid page number. The PDF has {len(pdf_reader.pages)} pages.")
+        
+        page = pdf_reader.pages[page_number - 1]
+        
+        pdf_writer = PdfWriter()
+        pdf_writer.add_page(page)
+    
+        output = BytesIO()
+        pdf_writer.write(output)
+        
+        b64 = base64.b64encode(output.getvalue()).decode()
+        
+        href = f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800px'></iframe>"
+        
+        return href
+
+def render_docx(file_path: str, page_number: int) -> str:
+    if not os.path.exists(file_path):
+        raise ValueError(f"File path {file_path} does not exist")
+    
+    with open(file_path, "rb") as docx_file:
+        result = mammoth.convert_to_html(docx_file)
+        html = result.value
+    # embedd html as iframe
+    href = f"<iframe srcdoc='{html}' width='100%' height='800px'></iframe>"
+    return href
+
 def find_files(base_dir):
     """
     Recursively search for files in a given directory and its subdirectories.
