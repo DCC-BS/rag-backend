@@ -34,6 +34,7 @@ def main():
     initialize_session_state(config)
     setup_page()
     render_chat_history()
+    render_example_queries()
     manage_chat()
     render_feedback_section()
     render_debug_section()
@@ -65,6 +66,7 @@ def setup_page():
         authenticator.logout()
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
+
         st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
             st.session_state["roles"]
         )
@@ -98,7 +100,10 @@ def manage_chat():
     Handle user interaction with the conversational AI and render
     the user query along with the AI response.
     """
-    if prompt := st.chat_input("Wie kann ich Dir heute helfen?"):
+    prompt = st.session_state.get('user_input') or st.chat_input("Wie kann ich Dir heute helfen?")
+    if prompt:
+        st.session_state.user_input = None
+
         # Render user message.
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -109,7 +114,6 @@ def manage_chat():
         # Render AI assistant's response.
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
-                # st.write_stream(st.session_state[CONVERSATIONAL_PIPELINE].streamlit_write_streaming_chunk)
                 response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(
                     prompt
                 )
@@ -171,6 +175,19 @@ def render_feedback_section():
                 save_feedback(feedback_data)
                 st.success("Danke für deinFeedback!")
 
+def render_example_queries():
+    st.subheader("Beispiel Fragen:")
+    example_queries = [
+        "Was für Angebote zur Familienergänzenden Tagesbetreuung gibt es?",
+        "Ich habe meine Stelle verloren, was muss ich tun?",
+        "Ab wann kann ich Hilflosenentschädigung beantragen?",
+    ]
+    cols = st.columns(3)
+    for col, query in zip(cols, example_queries):
+        with col:
+            if st.button(query):
+                st.session_state.user_input = query
+                # manage_chat()
 
 def save_feedback(feedback_data):
     """
