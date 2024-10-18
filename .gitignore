@@ -5,3 +5,4 @@ __pychache__
 lancedb
 rag_pipeline.png
 conf/local/*
+__pycache__/
