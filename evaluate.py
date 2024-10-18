@@ -1,5 +1,5 @@
 from rag_pipeline import SHRAGPipeline
-from document_storrage import create_inmemory_document_store
+from document_storage import create_inmemory_document_store
 from haystack.components.evaluators import SASEvaluator, ContextRelevanceEvaluator,FaithfulnessEvaluator,LLMEvaluator
 from haystack import Pipeline
 from haystack.evaluation.eval_run_result import EvaluationRunResult

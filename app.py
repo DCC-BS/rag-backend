@@ -104,20 +104,16 @@ def manage_chat():
     if prompt:
         st.session_state.user_input = None
 
-        # Render user message.
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "user", "content": prompt}
         )
 
-        # Render AI assistant's response.
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
-                response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(
-                    prompt
-                )
-                
+                response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
+                st.write(response)
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
@@ -223,8 +219,9 @@ def render_debug_section():
 
         relevant_docs = defaultdict(list)
         for document in st.session_state[RELEVANT_DOCUMENTS]:
-            doc_path = document.meta["file_path"]
-            doc_page = document.meta["page_number"]
+            doc_path = document.metadata["source"]
+            # doc_page = document.metadata["page"]
+            doc_page = 1
             # doc_relevance_score = document.score
             relevant_docs[doc_path].append(
                 {

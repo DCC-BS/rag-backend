@@ -2,19 +2,17 @@ DOC_SOURCES:
   EL: "data/EL"
   SH: "data/SH"
 DOC_STORE:
-  TYPE: "lancedb"  # InMemory
+  TYPE: "lancedb"
   PATH: "lancedb"
   TABLE_NAME: "documents"
-  SPLIT_SIZE: 1
-  SPLIT_OVERLAP: 0
-  SPLIT_METHOD: "page" # Options: "sentence", "paragraph", "word", "page"
+  SPLIT_SIZE: 1000
+  SPLIT_OVERLAP: 200
 RETRIEVER:
-  TYPE: "bm25" # embedding, bm25, hybrid
+  TYPE: "mmr" # similarity or mmr
+  FETCH_K: 20
   TOP_K: 5
 EMBEDDINGS:
-  MODEL: ""
-  DIM: 1024
+  MODEL: "jinaai/jina-embeddings-v3"
 LLM:
-  MODEL: "gemma-2-27b-instruct" # "phi3.5:3.8b-mini-instruct-fp16" # "llama3.1:70b" # "phi3.5:3.8b-mini-instruct-q4_K_M"
-  GENERATION_ARGS:
-    temperature: 0.2
+  MODEL: "llama-3.2-3b-instruct"
+  TEMPERATURE: 0.2
