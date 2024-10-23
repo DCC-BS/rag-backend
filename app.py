@@ -14,7 +14,6 @@ import pandas as pd
 load_dotenv()
 
 UI_RENDERED_MESSAGES = "ui_rendered_messages"
-CHAT_HISTORY = "chat_history"
 CONVERSATIONAL_PIPELINE = "conversational_pipeline"
 RELEVANT_DOCUMENTS = "None"
 TITLE_NAME = "Data Alchemy RAG Bot"
@@ -35,8 +34,8 @@ def main():
     setup_page()
     render_chat_history()
     manage_chat()
-    # render_feedback_section()
-    # render_debug_section()
+    render_feedback_section()
+    render_debug_section()
 
 
 def load_config():
@@ -49,7 +48,6 @@ def load_config():
     """
     return {
         UI_RENDERED_MESSAGES: [],
-        CHAT_HISTORY: [],
         RELEVANT_DOCUMENTS: [],
         CONVERSATIONAL_PIPELINE: None,
     }
@@ -100,10 +98,7 @@ def manage_chat():
     Handle user interaction with the conversational AI and render
     the user query along with the AI response.
     """
-    prompt = st.session_state.get('user_input') or st.chat_input("Wie kann ich Dir heute helfen?")
-    if prompt:
-        st.session_state.user_input = None
-
+    if prompt := st.chat_input("Wie kann ich Dir heute helfen?"):
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state[UI_RENDERED_MESSAGES].append(
@@ -112,10 +107,8 @@ def manage_chat():
 
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
-                # response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
-                itterator = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
+                *itterator, documents = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
                 response = st.write_stream(itterator)
-                documents = itterator[-1]
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
