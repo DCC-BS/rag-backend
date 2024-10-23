@@ -33,11 +33,10 @@ def main():
     config = load_config()
     initialize_session_state(config)
     setup_page()
-    render_example_queries()
     render_chat_history()
     manage_chat()
-    render_feedback_section()
-    render_debug_section()
+    # render_feedback_section()
+    # render_debug_section()
 
 
 def load_config():
@@ -66,10 +65,11 @@ def setup_page():
         authenticator.logout()
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
-
-        st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
-            st.session_state["roles"]
-        )
+        render_example_queries()
+        if st.session_state[CONVERSATIONAL_PIPELINE] is None:
+            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
+                st.session_state["roles"]
+            )
     elif st.session_state["authentication_status"] is False:
         st.error("Benutzername oder Passwort sind falsch")
     elif st.session_state["authentication_status"] is None:
@@ -112,8 +112,10 @@ def manage_chat():
 
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
-                response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
-                st.write(response)
+                # response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(prompt)
+                itterator = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
+                response = st.write_stream(itterator)
+                documents = itterator[-1]
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
