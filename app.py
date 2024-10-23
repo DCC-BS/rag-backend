@@ -112,6 +112,7 @@ def manage_chat():
             with st.spinner("Antwort wird generiert . . ."):
                 *itterator, documents = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
                 response = st.write_stream(itterator)
+                print(f"documents: {documents}")
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
@@ -217,8 +218,7 @@ def render_debug_section():
         relevant_docs = defaultdict(list)
         for document in st.session_state[RELEVANT_DOCUMENTS]:
             doc_path = document.metadata["source"]
-            # doc_page = document.metadata["page"]
-            doc_page = 1
+            doc_page = document.metadata["page_number"]
             # doc_relevance_score = document.score
             relevant_docs[doc_path].append(
                 {
@@ -237,6 +237,8 @@ def render_debug_section():
                     
 
 def render_page(file_path: str, page_number: int):
+    if not file_path:
+        return
     if file_path.endswith(".pdf"):
         href = render_pdf(file_path, page_number)
     elif file_path.endswith((".docx")):

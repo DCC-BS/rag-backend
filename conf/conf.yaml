@@ -5,8 +5,9 @@ DOC_STORE:
   TYPE: "lancedb"
   PATH: "lancedb"
   TABLE_NAME: "documents"
-  SPLIT_SIZE: 1000
-  SPLIT_OVERLAP: 200
+  MAX_CHUNK_SIZE: 3000
+  MIN_CHUNK_SIZE: 200
+  SPLIT_OVERLAP: 400
 RETRIEVER:
   TYPE: "similarity" # similarity or mmr
   FETCH_K: 20

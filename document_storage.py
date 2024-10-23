@@ -1,10 +1,12 @@
 from typing import Dict, List
 
-import lancedb
-from langchain_community.document_loaders import DirectoryLoader, Docx2txtLoader
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import LanceDB
+from langchain_huggingface import HuggingFaceEmbeddings
+
+import lancedb
+from docx_unstructured_reader import DocxUnstructuredReader
 from pdf_md_reader import PDFMarkdownReader
 from utils import config_loader
 
@@ -32,7 +34,10 @@ def create_lancedb_document_store(user_roles: List[str]):
             folder, glob="**/*.pdf", loader_cls=PDFMarkdownReader, show_progress=True
         )
         docx_loader = DirectoryLoader(
-            folder, glob="**/*.docx", loader_cls=Docx2txtLoader, show_progress=True
+            folder,
+            glob="**/*.docx",
+            loader_cls=DocxUnstructuredReader,
+            show_progress=True,
         )
 
         pdf_docs = pdf_loader.load()
@@ -43,11 +48,6 @@ def create_lancedb_document_store(user_roles: List[str]):
 
         documents.extend(pdf_docs + docx_docs)
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=config["DOC_STORE"]["SPLIT_SIZE"],
-        chunk_overlap=config["DOC_STORE"]["SPLIT_OVERLAP"],
-    )
-    split_docs = text_splitter.split_documents(documents)
 
     embeddings = HuggingFaceEmbeddings(
         model_name=config["EMBEDDINGS"]["MODEL"],
@@ -58,7 +58,7 @@ def create_lancedb_document_store(user_roles: List[str]):
     table = config["DOC_STORE"]["TABLE_NAME"]
 
     vector_store = LanceDB.from_documents(
-        split_docs,
+        documents,
         embeddings,
         connection=db,
         table_name=table,

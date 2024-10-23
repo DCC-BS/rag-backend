@@ -13,3 +13,4 @@ langchain-huggingface
 einops
 langchain-openai
 tantivy
+unstructured[docx,pptx,markdown]
