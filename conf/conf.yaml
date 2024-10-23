@@ -8,7 +8,7 @@ DOC_STORE:
   SPLIT_SIZE: 1000
   SPLIT_OVERLAP: 200
 RETRIEVER:
-  TYPE: "mmr" # similarity or mmr
+  TYPE: "similarity" # similarity or mmr
   FETCH_K: 20
   TOP_K: 5
 EMBEDDINGS:

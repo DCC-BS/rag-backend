@@ -98,7 +98,10 @@ def manage_chat():
     Handle user interaction with the conversational AI and render
     the user query along with the AI response.
     """
-    if prompt := st.chat_input("Wie kann ich Dir heute helfen?"):
+    prompt = st.session_state.get('user_input') or st.chat_input("Wie kann ich Dir heute helfen?")
+    if prompt is not None:
+        st.session_state.user_input = None
+
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state[UI_RENDERED_MESSAGES].append(
@@ -178,7 +181,6 @@ def render_example_queries():
         with col:
             if st.button(query):
                 st.session_state.user_input = query
-                # manage_chat()
 
 def save_feedback(feedback_data):
     """

@@ -12,3 +12,4 @@ docx2txt
 langchain-huggingface
 einops
 langchain-openai
+tantivy

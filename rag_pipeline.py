@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
-from langchain_community.llms import OpenAI
+from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
 from document_storage import get_lancedb_doc_store
@@ -23,12 +23,14 @@ class SHRAGPipeline:
         self.rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
     def _setup_retriever(self):
+        
         return self.vector_store.as_retriever(
             search_type=self.config["RETRIEVER"]["TYPE"],
             search_kwargs={
                 "k": self.config["RETRIEVER"]["TOP_K"],
-                "fetch_k": self.config["RETRIEVER"]["FETCH_K"],
-                # "filter": {"metadata.source": f"= Sozialhilfe"}, #IN ({', '.join(self.user_roles)})
+                # "fetch_k": self.config["RETRIEVER"]["FETCH_K"],
+                "filter": f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
+                # "query_type": "hybrid"
             },
         )
 
@@ -46,11 +48,11 @@ class SHRAGPipeline:
         )
 
         return ChatPromptTemplate.from_messages(
-            [("system", system_prompt), ("human", "{input}")]
+            [("system", system_prompt), ("user", "{input}")]
         )
 
     def _setup_llm(self):
-        return OpenAI(
+        return ChatOpenAI(
             model_name=self.config["LLM"]["MODEL"],
             temperature=self.config["LLM"]["TEMPERATURE"],
             openai_api_key="None",
@@ -60,3 +62,12 @@ class SHRAGPipeline:
     def query(self, question: str) -> Tuple[str, List]:
         result = self.rag_chain.invoke({"input": question})
         return result["answer"], result["context"]
+    
+    def stream_query(self, question: str):
+        context = None
+        for chunk in self.rag_chain.stream({"input": question}):
+            if "answer" in chunk:
+                yield chunk["answer"]
+            if "context" in chunk:
+                context = chunk["context"]
+        yield context
