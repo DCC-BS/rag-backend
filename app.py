@@ -14,7 +14,6 @@ import pandas as pd
 load_dotenv()
 
 UI_RENDERED_MESSAGES = "ui_rendered_messages"
-CHAT_HISTORY = "chat_history"
 CONVERSATIONAL_PIPELINE = "conversational_pipeline"
 RELEVANT_DOCUMENTS = "None"
 TITLE_NAME = "Data Alchemy RAG Bot"
@@ -33,7 +32,6 @@ def main():
     config = load_config()
     initialize_session_state(config)
     setup_page()
-    render_example_queries()
     render_chat_history()
     manage_chat()
     render_feedback_section()
@@ -50,7 +48,6 @@ def load_config():
     """
     return {
         UI_RENDERED_MESSAGES: [],
-        CHAT_HISTORY: [],
         RELEVANT_DOCUMENTS: [],
         CONVERSATIONAL_PIPELINE: None,
     }
@@ -66,10 +63,11 @@ def setup_page():
         authenticator.logout()
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
-
-        st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
-            st.session_state["roles"]
-        )
+        render_example_queries()
+        if st.session_state[CONVERSATIONAL_PIPELINE] is None:
+            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
+                st.session_state["roles"]
+            )
     elif st.session_state["authentication_status"] is False:
         st.error("Benutzername oder Passwort sind falsch")
     elif st.session_state["authentication_status"] is None:
@@ -101,23 +99,20 @@ def manage_chat():
     the user query along with the AI response.
     """
     prompt = st.session_state.get('user_input') or st.chat_input("Wie kann ich Dir heute helfen?")
-    if prompt:
+    if prompt is not None:
         st.session_state.user_input = None
 
-        # Render user message.
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "user", "content": prompt}
         )
 
-        # Render AI assistant's response.
         with st.chat_message("assistant"):
             with st.spinner("Antwort wird generiert . . ."):
-                response, documents = st.session_state[CONVERSATIONAL_PIPELINE].query(
-                    prompt
-                )
-                
+                *itterator, documents = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
+                response = st.write_stream(itterator)
+                print(f"documents: {documents}")
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}
@@ -187,7 +182,6 @@ def render_example_queries():
         with col:
             if st.button(query):
                 st.session_state.user_input = query
-                # manage_chat()
 
 def save_feedback(feedback_data):
     """
@@ -223,8 +217,8 @@ def render_debug_section():
 
         relevant_docs = defaultdict(list)
         for document in st.session_state[RELEVANT_DOCUMENTS]:
-            doc_path = document.meta["file_path"]
-            doc_page = document.meta["page_number"]
+            doc_path = document.metadata["source"]
+            doc_page = document.metadata["page_number"]
             # doc_relevance_score = document.score
             relevant_docs[doc_path].append(
                 {
@@ -243,6 +237,8 @@ def render_debug_section():
                     
 
 def render_page(file_path: str, page_number: int):
+    if not file_path:
+        return
     if file_path.endswith(".pdf"):
         href = render_pdf(file_path, page_number)
     elif file_path.endswith((".docx")):

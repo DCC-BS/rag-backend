@@ -6,7 +6,7 @@ import base64
 from PyPDF2 import PdfReader, PdfWriter
 from io import BytesIO
 
-from docx import Document
+import glob
 import mammoth
 
 def config_loader(file_path: str):
@@ -79,3 +79,23 @@ def find_files(base_dir):
                 file_list[file_extension].append(file_path)
     
     return file_list
+
+def remove_temp_docx(folder_path):
+    # Pattern for temporary Word files
+    pattern = os.path.join(folder_path, '**', '~$*.docx')
+    
+    # Find all temporary .docx files
+    temp_files = glob.glob(pattern, recursive=True)
+    
+    # Remove each temporary file
+    for file in temp_files:
+        try:
+            os.remove(file)
+            print(f"Removed: {file}")
+        except Exception as e:
+            print(f"Error removing {file}: {e}")
+    
+    print(f"Total temporary .docx files removed: {len(temp_files)}")
+
+if __name__== "__main__":
+    remove_temp_docx('.\data')
