@@ -189,6 +189,11 @@ def save_feedback(feedback_data):
     """
     feedback_file = "feedback.csv"
 
+    feedback_data["resonse"] = " ".join(feedback_data["resonse"].split())
+    feedback_data["resonse"] = feedback_data["resonse"].replace('\n',' ')
+    feedback_data["feedback"] = " ".join(feedback_data["feedback"].split())
+    feedback_data["feedback"] = feedback_data["feedback"].replace('\n',' ')
+
     if not os.path.exists(feedback_file):
         df = pd.DataFrame(columns=feedback_data.keys())
     else:
