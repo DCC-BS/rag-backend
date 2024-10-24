@@ -30,7 +30,8 @@ class SHRAGPipeline:
                 "k": self.config["RETRIEVER"]["TOP_K"],
                 # "fetch_k": self.config["RETRIEVER"]["FETCH_K"],
                 "filter": f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
-                # "query_type": "hybrid"
+                # "query_type": "hybrid",
+                # "name": self.config["DOC_STORE"]["TABLE_NAME"]
             },
         )
 
@@ -39,7 +40,7 @@ class SHRAGPipeline:
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland."
             "Use the following pieces of context to answer the question at the end."
             "If you don't know the answer, 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.', don't try to make up an answer."
-            "Use three sentences maximum and keep the answer concise."
+            "Keep the answer concise."
             "Answer in German."
             "Context:"
             "\n\n"

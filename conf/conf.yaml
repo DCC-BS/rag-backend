@@ -15,5 +15,5 @@ RETRIEVER:
 EMBEDDINGS:
   MODEL: "jinaai/jina-embeddings-v3"
 LLM:
-  MODEL: "llama-3.2-3b-instruct"
-  TEMPERATURE: 0.2
+  MODEL: "meta-llama-3.1-70b-instruct" # "llama-3.2-3b-instruct"
+  TEMPERATURE: 0.1
