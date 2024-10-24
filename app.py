@@ -175,7 +175,7 @@ def render_example_queries():
     example_queries = [
         "Was für Angebote zur Familienergänzenden Tagesbetreuung gibt es?",
         "Ich habe meine Stelle verloren, was muss ich tun?",
-        "Ab wann kann ich Hilflosenentschädigung beantragen?",
+        "Werden Beiträge der Hilflosenentschädigung von den Ansprüchen auf andere Sozialbeiträge abgezogen?",
     ]
     cols = st.columns(3)
     for col, query in zip(cols, example_queries):
