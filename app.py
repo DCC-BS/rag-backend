@@ -189,8 +189,8 @@ def save_feedback(feedback_data):
     """
     feedback_file = "feedback.csv"
 
-    feedback_data["resonse"] = " ".join(feedback_data["resonse"].split())
-    feedback_data["resonse"] = feedback_data["resonse"].replace('\n',' ')
+    feedback_data["response"] = " ".join(feedback_data["response"].split())
+    feedback_data["response"] = feedback_data["response"].replace('\n',' ')
     feedback_data["feedback"] = " ".join(feedback_data["feedback"].split())
     feedback_data["feedback"] = feedback_data["feedback"].replace('\n',' ')
 
@@ -218,7 +218,7 @@ def render_debug_section():
     Render a debug section showing relevant documents grouped by file path.
     """
     if st.session_state[RELEVANT_DOCUMENTS]:
-        st.markdown("#### Folgende Dokumente wurden als Kontext vewrwendet:")
+        st.markdown("#### Folgende Dokumente wurden als Kontext verwendet:")
 
         relevant_docs = defaultdict(list)
         for document in st.session_state[RELEVANT_DOCUMENTS]:
