@@ -1,5 +1,3 @@
-import yaml
-from yaml.loader import SafeLoader
 import os
 
 import base64
@@ -8,10 +6,6 @@ from io import BytesIO
 
 import glob
 import mammoth
-
-def config_loader(file_path: str):
-    with open(file_path, encoding='utf-8') as file:
-        return yaml.load(file, Loader=SafeLoader)
     
 def render_pdf(file_path: str, page_number: int) -> str:
     if not os.path.exists(file_path):

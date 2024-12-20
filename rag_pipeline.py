@@ -25,13 +25,13 @@ class SHRAGPipeline:
     def _setup_retriever(self):
         
         return self.vector_store.as_retriever(
-            search_type=self.config["RETRIEVER"]["TYPE"],
+            search_type=self.config.RETRIEVER.TYPE,
             search_kwargs={
-                "k": self.config["RETRIEVER"]["TOP_K"],
-                # "fetch_k": self.config["RETRIEVER"]["FETCH_K"],
+                "k": self.config.RETRIEVER.TOP_K,
+                # "fetch_k": self.config.RETRIEVER.FETCH_K,
                 "filter": f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
                 # "query_type": "hybrid",
-                # "name": self.config["DOC_STORE"]["TABLE_NAME"]
+                # "name": self.config.DOC_STORE.TABLE_NAME
             },
         )
 
@@ -54,8 +54,8 @@ class SHRAGPipeline:
 
     def _setup_llm(self):
         return ChatOpenAI(
-            model_name=self.config["LLM"]["MODEL"],
-            temperature=self.config["LLM"]["TEMPERATURE"],
+            model_name=self.config.LLM.MODEL,
+            temperature=self.config.LLM.TEMPERATURE,
             openai_api_key="None",
             openai_api_base=os.getenv("API_BASE_URL"),
         )

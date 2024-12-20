@@ -1,4 +1,10 @@
+import sys
+from rich.traceback import install
+
+from log_config import setup_logger
 from collections import defaultdict
+from config import load_config, get_config
+
 import os
 
 import streamlit as st
@@ -6,22 +12,34 @@ import streamlit_authenticator as stauth
 from dotenv import load_dotenv
 
 from rag_pipeline import SHRAGPipeline
-from utils import config_loader, render_pdf, render_docx
+from utils import render_pdf, render_docx
 import pandas as pd
 
-
-
 load_dotenv()
+
+install(show_locals=True)
+
+logger = setup_logger()
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    """Handles unhandled exceptions, logs them using the logger."""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
 
 UI_RENDERED_MESSAGES = "ui_rendered_messages"
 CONVERSATIONAL_PIPELINE = "conversational_pipeline"
 RELEVANT_DOCUMENTS = "None"
 TITLE_NAME = "Data Alchemy RAG Bot"
 
-login_config = config_loader("conf/local/users.yaml")
-config = config_loader("conf/conf.yaml")
+load_config()
+config = get_config()
 st.set_page_config(page_title=TITLE_NAME)
-authenticator = stauth.Authenticate(**login_config)
+authenticator = stauth.Authenticate(**config.LOGIN_CONFIG)
 
 
 def main():

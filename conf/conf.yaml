@@ -1,6 +1,6 @@
-DOC_SOURCES:
-  EL: "data/EL"
-  SH: "data/SH"
+APP_NAME: "RAG Bot"
+VERSION: "0.0.1"
+DESCRIPTION: "A Retrieval-Augmented Generation (RAG) bot for document-based queries."
 DOC_STORE:
   TYPE: "lancedb"
   PATH: "lancedb"
@@ -15,5 +15,5 @@ RETRIEVER:
 EMBEDDINGS:
   MODEL: "jinaai/jina-embeddings-v3"
 LLM:
-  MODEL: "meta-llama-3.1-70b-instruct" # "llama-3.2-3b-instruct"
+  MODEL: "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   TEMPERATURE: 0.1

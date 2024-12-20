@@ -1,60 +1,40 @@
-from typing import Dict, List
+from typing import List
 
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import LanceDB
 from langchain_huggingface import HuggingFaceEmbeddings
 
 import lancedb
-from docx_unstructured_reader import DocxUnstructuredReader
-from pdf_md_reader import PDFMarkdownReader
-from utils import config_loader
+from config import load_config
+from docling_loader import DoclingLoader
+import torch
 
-config = config_loader("conf/conf.yaml")
-
-
-def get_sources_for_user_roles(user_roles: List[str]) -> Dict[str, str]:
-    sources = {}
-    role_config = {
-        "Sozialhilfe": config["DOC_SOURCES"]["SH"],
-        "Ergänzungsleistungen": config["DOC_SOURCES"]["EL"],
-    }
-    for role, folder in role_config.items():
-        if role in user_roles:
-            sources[role] = folder
-    return sources
-
+config = load_config()
 
 def create_lancedb_document_store(user_roles: List[str]):
-    sources = get_sources_for_user_roles(user_roles)
+    sources = config.DOC_SOURCES
+
     documents = []
+    extensions = ["pdf", "docx", "pptx", "html", "xlsx"]
 
     for role, folder in sources.items():
-        pdf_loader = DirectoryLoader(
-            folder, glob="**/*.pdf", loader_cls=PDFMarkdownReader, show_progress=True
-        )
-        docx_loader = DirectoryLoader(
-            folder,
-            glob="**/*.docx",
-            loader_cls=DocxUnstructuredReader,
-            show_progress=True,
-        )
+        for extension in extensions:
+            doc_loader = DirectoryLoader(
+                folder, glob=f"**/*.{extension}", loader_cls=DoclingLoader, show_progress=True, loader_kwargs={"organization": role}
+            )
 
-        pdf_docs = pdf_loader.load()
-        docx_docs = docx_loader.load()
+            docs = doc_loader.load()
+            documents.extend(docs)
 
-        for doc in pdf_docs + docx_docs:
-            doc.metadata["organization"] = role
-
-        documents.extend(pdf_docs + docx_docs)
-
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     embeddings = HuggingFaceEmbeddings(
-        model_name=config["EMBEDDINGS"]["MODEL"],
-        model_kwargs={"device": "cuda", "trust_remote_code": True},
+        model_name=config.EMBEDDINGS.MODEL,
+        model_kwargs={"device": device, "trust_remote_code": True},
+        encode_kwargs={"task":"text-matching"}
     )
-
-    db = lancedb.connect(config["DOC_STORE"]["PATH"])
-    table = config["DOC_STORE"]["TABLE_NAME"]
+    
+    db = lancedb.connect(config.DOC_STORE.PATH)
+    table = config.DOC_STORE.TABLE_NAME
 
     vector_store = LanceDB.from_documents(
         documents,
@@ -67,15 +47,14 @@ def create_lancedb_document_store(user_roles: List[str]):
 
 
 def get_lancedb_doc_store():
-    db = lancedb.connect(config["DOC_STORE"]["PATH"])
-    table = config["DOC_STORE"]["TABLE_NAME"]
+    db = lancedb.connect(config.DOC_STORE.PATH)
+    table = config.DOC_STORE.TABLE_NAME
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     embeddings = HuggingFaceEmbeddings(
-        model_name=config["EMBEDDINGS"]["MODEL"],
-        model_kwargs={"device": "cuda", "trust_remote_code": True},
+        model_name=config.EMBEDDINGS.MODEL,
+        model_kwargs={"device": device, "trust_remote_code": True},
     )
 
     return LanceDB(connection=db, table_name=table, embedding=embeddings)
 
-
-if __name__ == "__main__":
-    create_lancedb_document_store(["Sozialhilfe", "Ergänzungsleistungen"])
