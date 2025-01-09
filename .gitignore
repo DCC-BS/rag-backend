@@ -6,3 +6,4 @@ lancedb
 rag_pipeline.png
 conf/local/*
 __pycache__/
+*.log

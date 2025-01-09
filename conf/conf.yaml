@@ -10,10 +10,13 @@ DOC_STORE:
   SPLIT_OVERLAP: 400
 RETRIEVER:
   TYPE: "similarity" # similarity or mmr
-  FETCH_K: 20
+  FETCH_K: 50
   TOP_K: 5
 EMBEDDINGS:
-  MODEL: "jinaai/jina-embeddings-v3"
+  API_URL: "http://localhost:50001"
 LLM:
-  MODEL: "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
+  MODEL: "granite-3.1-8b-instruct" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   TEMPERATURE: 0.1
+DOCLING:
+  NUM_THREADS: 16
+  USE_GPU: True

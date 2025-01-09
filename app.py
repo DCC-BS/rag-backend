@@ -130,7 +130,6 @@ def manage_chat():
             with st.spinner("Antwort wird generiert . . ."):
                 *itterator, documents = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
                 response = st.write_stream(itterator)
-                print(f"documents: {documents}")
                 st.session_state[RELEVANT_DOCUMENTS] = documents
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": response}

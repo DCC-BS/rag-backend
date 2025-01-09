@@ -7,13 +7,14 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
 from document_storage import get_lancedb_doc_store
-from utils import config_loader
+from config import get_config
+from lance_langchain import LanceDBRetriever, BentoMLReranker
 
 
 class SHRAGPipeline:
     def __init__(self, user_roles: List[str]) -> None:
         self.user_roles = user_roles
-        self.config = config_loader("conf/conf.yaml")
+        self.config = get_config()
         self.vector_store = get_lancedb_doc_store()
         llm = self._setup_llm()
         prompt = self._setup_prompt()
@@ -23,15 +24,17 @@ class SHRAGPipeline:
         self.rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
     def _setup_retriever(self):
-        
+        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=self.vector_store._text_key)
+        return LanceDBRetriever(table=self.vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),reranker=reranker, vector_col=self.vector_store._vector_key, fts_col=self.vector_store._text_key, filter=f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",)
         return self.vector_store.as_retriever(
             search_type=self.config.RETRIEVER.TYPE,
             search_kwargs={
+                "search_type": "mmr",
                 "k": self.config.RETRIEVER.TOP_K,
-                # "fetch_k": self.config.RETRIEVER.FETCH_K,
+                "fetch_k": self.config.RETRIEVER.FETCH_K,
                 "filter": f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
-                # "query_type": "hybrid",
-                # "name": self.config.DOC_STORE.TABLE_NAME
+                "query_type": "hybrid",
+                "name": self.config.DOC_STORE.TABLE_NAME
             },
         )
 
