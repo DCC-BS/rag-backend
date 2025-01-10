@@ -23,6 +23,7 @@ dependencies = [
     "asyncio>=3.4.3",
     "ninja>=1.11.1.2",
     "transformers>=4.47.0",
+    "tantivy>=0.22.0",
 ]
 
 [project.optional-dependencies]

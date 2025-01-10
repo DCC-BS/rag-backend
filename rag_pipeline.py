@@ -3,12 +3,12 @@ from typing import List, Tuple
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 
-from document_storage import get_lancedb_doc_store
 from config import get_config
-from lance_langchain import LanceDBRetriever, BentoMLReranker
+from document_storage import get_lancedb_doc_store
+from lance_langchain import BentoMLReranker, LanceDBRetriever
 
 
 class SHRAGPipeline:
@@ -24,18 +24,16 @@ class SHRAGPipeline:
         self.rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
     def _setup_retriever(self):
-        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=self.vector_store._text_key)
-        return LanceDBRetriever(table=self.vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),reranker=reranker, vector_col=self.vector_store._vector_key, fts_col=self.vector_store._text_key, filter=f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",)
-        return self.vector_store.as_retriever(
-            search_type=self.config.RETRIEVER.TYPE,
-            search_kwargs={
-                "search_type": "mmr",
-                "k": self.config.RETRIEVER.TOP_K,
-                "fetch_k": self.config.RETRIEVER.FETCH_K,
-                "filter": f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
-                "query_type": "hybrid",
-                "name": self.config.DOC_STORE.TABLE_NAME
-            },
+        reranker = BentoMLReranker(
+            api_url=self.config.EMBEDDINGS.API_URL, column=self.vector_store._text_key
+        )
+        return LanceDBRetriever(
+            table=self.vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),
+            embeddings=self.vector_store.embeddings,
+            reranker=reranker,
+            vector_col=self.vector_store._vector_key,
+            fts_col=self.vector_store._text_key,
+            filter=f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
         )
 
     def _setup_prompt(self):
@@ -66,7 +64,7 @@ class SHRAGPipeline:
     def query(self, question: str) -> Tuple[str, List]:
         result = self.rag_chain.invoke({"input": question})
         return result["answer"], result["context"]
-    
+
     def stream_query(self, question: str):
         context = None
         for chunk in self.rag_chain.stream({"input": question}):

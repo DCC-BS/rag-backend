@@ -2786,6 +2786,7 @@ dependencies = [
     { name = "rich" },
     { name = "streamlit" },
     { name = "streamlit-authenticator" },
+    { name = "tantivy" },
     { name = "transformers" },
     { name = "wheel" },
 ]
@@ -2814,6 +2815,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9.4" },
     { name = "streamlit", specifier = ">=1.41.1" },
     { name = "streamlit-authenticator", specifier = ">=0.4.1" },
+    { name = "tantivy", specifier = ">=0.22.0" },
     { name = "transformers", specifier = ">=4.47.0" },
     { name = "wheel", specifier = ">=0.45.1" },
 ]
@@ -3002,6 +3004,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252 },
+]
+
+[[package]]
+name = "tantivy"
+version = "0.22.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/e2/0a7b8ce41e9717544648ce1fa511cd37f5d634cc6daef48c03157ec7462b/tantivy-0.22.0.tar.gz", hash = "sha256:dce07fa2910c94934aa3d96c91087936c24e4a5802d839625d67edc6d1c95e5c", size = 60732 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/f0/88bb16d4e9728d6f2c53fa26cd9b14b98201dae636754155ea89918714d6/tantivy-0.22.0-cp312-cp312-macosx_10_7_x86_64.whl", hash = "sha256:925682f3acb65c85c2a5a5b131401b9f30c184ea68aa73a8cc7c2ea6115e8ae3", size = 3199219 },
+    { url = "https://files.pythonhosted.org/packages/ab/2b/a361cc7228663f6fa14a82de6568bc728c8c2c212ca979d17482ea7cdffd/tantivy-0.22.0-cp312-cp312-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:d75760e45a329313001354d6ca415ff12d9d812343792ae133da6bfbdc4b04a5", size = 6216468 },
+    { url = "https://files.pythonhosted.org/packages/2a/c6/ff057ac128dd0bd9508255af85235f176d0c27b4f9e668d22a39b7a5d248/tantivy-0.22.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fd909d122b5af457d955552c304f8d5d046aee7024c703c62652ad72af89f3c7", size = 4508125 },
+    { url = "https://files.pythonhosted.org/packages/f0/cc/b8f7faf35403b9ed5fd349a15cc8637ae3ce75983272fecc32f07b9dbe47/tantivy-0.22.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c99266ffb204721eb2bd5b3184aa87860a6cff51b4563f808f78fa22d85a8093", size = 4479785 },
+    { url = "https://files.pythonhosted.org/packages/90/1a/c52e93ebc2c4a3269e5c5d7c7bde179864d60b9468a621619968b634b702/tantivy-0.22.0-cp312-none-win_amd64.whl", hash = "sha256:9ed6b813a1e7769444e33979b46b470b2f4c62d983c2560ce9486fb9be1491c9", size = 2591792 },
 ]
 
 [[package]]
