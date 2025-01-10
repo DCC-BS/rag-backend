@@ -8,7 +8,8 @@ from langchain_openai import ChatOpenAI
 
 from config import get_config
 from document_storage import get_lancedb_doc_store
-from lance_langchain import BentoMLReranker, LanceDBRetriever
+from lance_langchain import LanceDBRetriever
+from bento_embeddings import BentoMLReranker
 
 
 class SHRAGPipeline:
@@ -33,6 +34,8 @@ class SHRAGPipeline:
             reranker=reranker,
             vector_col=self.vector_store._vector_key,
             fts_col=self.vector_store._text_key,
+            k=self.config.RETRIEVER.TOP_K,
+            docs_before_rerank=self.config.RETRIEVER.FETCH_FOR_RERANKING,
             filter=f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
         )
 

@@ -15,6 +15,7 @@ class LanceDBRetriever(BaseRetriever):
     fts_col: str = "text"
     vector_col: str = "vector"
     k: int = 5
+    docs_before_rerank: int = 20
     filter: str = ""
 
     def _get_relevant_documents(self, query: str) -> List[Document]:
@@ -26,6 +27,7 @@ class LanceDBRetriever(BaseRetriever):
             .vector(vector)
             .text(query)
             .where(self.filter, prefilter=True)
+            .limit(self.docs_before_rerank)
             .rerank(self.reranker)
             .limit(self.k)
             .to_list()

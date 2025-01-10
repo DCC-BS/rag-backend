@@ -10,7 +10,7 @@ DOC_STORE:
   SPLIT_OVERLAP: 400
 RETRIEVER:
   TYPE: "similarity" # similarity or mmr
-  FETCH_K: 50
+  FETCH_FOR_RERANKING: 50
   TOP_K: 5
 EMBEDDINGS:
   API_URL: "http://localhost:50001"
