@@ -2,9 +2,9 @@ from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import LanceDB
 
 import lancedb
-from bento_embeddings import BentoEmbeddings
-from config import load_config
-from docling_loader import DoclingLoader
+from core.bento_embeddings import BentoEmbeddings
+from data.docling_loader import DoclingLoader
+from utils.config import load_config
 
 config = load_config()
 

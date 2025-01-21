@@ -1,4 +1,5 @@
 data   
+!src/data
 venv
 .env
 __pychache__

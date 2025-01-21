@@ -24,6 +24,7 @@ dependencies = [
     "ninja>=1.11.1.2",
     "transformers>=4.47.0",
     "tantivy>=0.22.0",
+    "langgraph>=0.2.63",
 ]
 
 [project.optional-dependencies]
@@ -53,3 +54,41 @@ explicit = true
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+[tool.ruff]
+# Same as Black.
+line-length = 100
+indent-width = 4
+
+# Assume Python 3.12
+target-version = "py312"
+
+[tool.ruff.lint]
+# Add rules to enable
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+]
+
+# Ignore specific rules
+ignore = []
+
+[tool.ruff.format]
+# Use double quotes for strings.
+quote-style = "double"
+
+# Indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# Group imports by type (standard library, third-party, first-party).
+combine-as-imports = true
+force-wrap-aliases = true

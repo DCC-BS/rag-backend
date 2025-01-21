@@ -15,8 +15,8 @@ from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document as LCDocument
 from transformers import AutoTokenizer
 
-from config import get_config
-from log_config import setup_logger
+from utils.config import get_config
+from utils.logging import setup_logger
 
 
 class DoclingLoader(BaseLoader):
@@ -110,7 +110,7 @@ class DoclingLoader(BaseLoader):
 
             for chunk in chunks:
                 if len(chunk.text.strip()) == 0:
-                        continue
+                    continue
                 meta = chunk.meta.model_dump()
                 prov = meta["doc_items"][0]["prov"]
                 meta = dict(

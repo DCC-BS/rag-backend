@@ -1,8 +1,10 @@
 import logging
 from logging.handlers import RotatingFileHandler
+
 from rich.logging import RichHandler
 
-def setup_logger(log_file_path="app.log"):
+
+def setup_logger(log_file_path="logs/app.log"):
     """
     Sets up the application logger.
 
