@@ -25,23 +25,22 @@ def manage_chat():
         )
 
         with st.chat_message("assistant"):
-            # Create a status container for documents
             with st.status("Suche relevante Dokumente...", expanded=True) as status:
                 full_response = ""
                 
                 def response_generator():
                     nonlocal full_response
-                    stream = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt)
-                    for chunk in stream:
+                    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt):
                         if isinstance(chunk, list):  # This is the documents
                             st.session_state[RELEVANT_DOCUMENTS] = chunk
                             status.update(label="Antwort generieren...", state="running")
                             yield f"{len(chunk)} Dokumente gefunden \n\n"
                         else:
                             # This is the text chunk
-                            full_response += str(chunk )
+                            full_response += str(chunk)
                             yield str(chunk)
                     status.update(label="Fertig!", state="complete")
+
                 st.write_stream(response_generator())
                 
         st.session_state[UI_RENDERED_MESSAGES].append(

@@ -1,8 +1,11 @@
-from typing import Annotated, List, Optional, Sequence, Tuple
+import asyncio
+import operator
+from typing import Annotated, Iterator, List, Optional, Sequence, Tuple, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
@@ -16,7 +19,7 @@ from utils.config import get_config
 
 class RAGState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    context: Optional[List[Document]]
+    context: Annotated[Optional[List[Document]], operator.add]
     input: str
 
 
@@ -55,15 +58,18 @@ class SHRAGPipeline:
         docs = self.retriever.invoke(state["input"])
         return {"context": docs}
 
-    def call_model(self, state: RAGState, config):
+    async def call_model(self, state: RAGState, config: RunnableConfig):
+        if not state["messages"]:
+            state["messages"] = [SystemMessage(content=self.system_prompt)]
+
         template = ChatPromptTemplate([
             ("user", "Context: {context}\n\nQuestion: {input}"),
         ])
         context = "\n\n".join(doc.page_content for doc in state["context"])
-        prompt = template.invoke({"context": context, "input": state["input"]})
-        messages = SystemMessage(content=self.system_prompt) + state["messages"] + prompt.messages
-        response = self.llm.invoke(messages.messages, config)
-        return {"messages": [response]}
+        prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
+        messages = state["messages"] + prompt.messages
+        response = await self.llm.ainvoke(messages, config)
+        return {"messages": response}
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
@@ -90,6 +96,7 @@ class SHRAGPipeline:
             temperature=self.config.LLM.TEMPERATURE,
             openai_api_key="None",
             openai_api_base=self.config.LLM.API_URL,
+            max_tokens=self.config.LLM.MAX_TOKENS,
         )
 
         return llm
@@ -98,14 +105,36 @@ class SHRAGPipeline:
         result = self.graph.invoke({"input": question})
         return result["answer"], result["context"]
 
-    def stream_query(self, question: str):
-        initial_state = {
+    async def astream_query(self, question: str) -> Iterator[Union[List[Document], str]]:
+        input = {
             "input": question,
-            "messages": [],
-            "context": None
         }
-        for chunk in self.graph.stream(initial_state, stream_mode="updates"):
-            if "retrieve" in chunk and "context" in chunk["retrieve"]:
-                yield chunk["retrieve"]["context"]
-            if "answer" in chunk and "messages" in chunk["answer"]:
-                yield chunk["answer"]["messages"][0].content
+        async for chunk in self.graph.astream(input=input, stream_mode=["updates", "messages"]):
+            if "updates" == chunk[0]:
+                if "retrieve" in chunk[1]:
+                    yield chunk[1]["retrieve"]["context"]
+            if "messages" == chunk[0]:
+                for message in chunk[1]:
+                    if isinstance(message, AIMessage):
+                        yield message.content
+
+    def stream_query(self, question: str) -> Iterator[Union[List[Document], str]]:
+        """Synchronous wrapper around astream_query"""
+        async def run_async():
+            async for chunk in self.astream_query(question):
+                yield chunk
+
+        # Create and run event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            agen = run_async()
+            while True:
+                try:
+                    yield loop.run_until_complete(agen.__anext__())
+                except StopAsyncIteration:
+                    break
+        finally:
+            loop.close()
+        
+
