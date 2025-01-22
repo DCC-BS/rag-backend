@@ -7,6 +7,7 @@ from langchain.schema import Document
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
@@ -17,10 +18,17 @@ from data.document_storage import get_lancedb_doc_store
 from utils.config import get_config
 
 
-class RAGState(TypedDict):
+class InputState(TypedDict):
+    input: str
+
+
+class OutputState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     context: Annotated[Optional[List[Document]], operator.add]
-    input: str
+
+
+class RAGState(InputState, OutputState):
+    pass
 
 
 class SHRAGPipeline:
@@ -39,9 +47,10 @@ class SHRAGPipeline:
         # Setup components
         self.retriever = self._setup_retriever()
         self.llm = self._setup_llm()
+        self.memory = MemorySaver()
 
         # Create graph
-        workflow = StateGraph(RAGState)
+        workflow = StateGraph(RAGState, input=InputState, output=OutputState)
         # Add nodes
         workflow.add_node("retrieve", self.retrieve)
         workflow.add_node("answer", self.call_model)
@@ -52,19 +61,22 @@ class SHRAGPipeline:
         workflow.add_edge("answer", END)
 
         # Compile graph
-        self.graph = workflow.compile()
+        self.graph = workflow.compile(checkpointer=self.memory)
+        self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
-    def retrieve(self, state: RAGState):
-        docs = self.retriever.invoke(state["input"])
+    def retrieve(self, state: RAGState, config: RunnableConfig):
+        docs = self.retriever.invoke(state["input"], config)
         return {"context": docs}
 
     async def call_model(self, state: RAGState, config: RunnableConfig):
         if not state["messages"]:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
-        template = ChatPromptTemplate([
-            ("user", "Context: {context}\n\nQuestion: {input}"),
-        ])
+        template = ChatPromptTemplate(
+            [
+                ("user", "Context: {context}\n\nQuestion: {input}"),
+            ]
+        )
         context = "\n\n".join(doc.page_content for doc in state["context"])
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
         messages = state["messages"] + prompt.messages
@@ -105,11 +117,16 @@ class SHRAGPipeline:
         result = self.graph.invoke({"input": question})
         return result["answer"], result["context"]
 
-    async def astream_query(self, question: str) -> Iterator[Union[List[Document], str]]:
+    async def astream_query(
+        self, question: str, thread_id: str
+    ) -> Iterator[Union[List[Document], str]]:
         input = {
             "input": question,
         }
-        async for chunk in self.graph.astream(input=input, stream_mode=["updates", "messages"]):
+        config = {"configurable": {"thread_id": thread_id}}
+        async for chunk in self.graph.astream(
+            input=input, stream_mode=["updates", "messages"], config=config
+        ):
             if "updates" == chunk[0]:
                 if "retrieve" in chunk[1]:
                     yield chunk[1]["retrieve"]["context"]
@@ -118,10 +135,11 @@ class SHRAGPipeline:
                     if isinstance(message, AIMessage):
                         yield message.content
 
-    def stream_query(self, question: str) -> Iterator[Union[List[Document], str]]:
+    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[List[Document], str]]:
         """Synchronous wrapper around astream_query"""
+
         async def run_async():
-            async for chunk in self.astream_query(question):
+            async for chunk in self.astream_query(question, thread_id):
                 yield chunk
 
         # Create and run event loop
@@ -136,5 +154,3 @@ class SHRAGPipeline:
                     break
         finally:
             loop.close()
-        
-

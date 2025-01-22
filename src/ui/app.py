@@ -1,4 +1,5 @@
 import sys
+import uuid
 
 import streamlit as st
 import streamlit_authenticator as stauth
@@ -29,9 +30,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical(
-        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
-    )
+    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
 sys.excepthook = handle_exception
@@ -75,10 +74,9 @@ def setup_page():
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
         render_example_queries()
+        st.session_state["user_id"] = uuid.uuid4()
         if st.session_state[CONVERSATIONAL_PIPELINE] is None:
-            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(
-                st.session_state["roles"]
-            )
+            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(st.session_state["roles"])
     elif st.session_state["authentication_status"] is False:
         st.error("Benutzername oder Passwort sind falsch")
     elif st.session_state["authentication_status"] is None:

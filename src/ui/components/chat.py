@@ -12,6 +12,7 @@ def manage_chat():
     Handle user interaction with the conversational AI and render
     the user query along with the AI response.
     """
+    thread_id = st.session_state["user_id"]
     prompt = st.session_state.get("user_input") or st.chat_input(
         "Wie kann ich Dir heute helfen?"
     )
@@ -30,7 +31,7 @@ def manage_chat():
                 
                 def response_generator():
                     nonlocal full_response
-                    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt):
+                    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt, thread_id):
                         if isinstance(chunk, list):  # This is the documents
                             st.session_state[RELEVANT_DOCUMENTS] = chunk
                             status.update(label="Antwort generieren...", state="running")
