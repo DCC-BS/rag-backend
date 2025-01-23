@@ -1,35 +1,19 @@
 import asyncio
-import operator
-from typing import Annotated, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Iterator, List, Tuple, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
+from langgraph.graph import END, START, StateGraph
 
 from core.bento_embeddings import BentoMLReranker
 from core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
+from core.rag_states import InputState, OutputState, RAGState, RouteQuery
 from data.document_storage import get_lancedb_doc_store
 from utils.config import get_config
-
-
-class InputState(TypedDict):
-    input: str
-    skip_retrieval: bool
-
-
-class OutputState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-    context: Annotated[Optional[List[Document]], operator.add]
-
-
-class RAGState(InputState, OutputState):
-    pass
 
 
 class SHRAGPipeline:
@@ -48,6 +32,9 @@ class SHRAGPipeline:
         # Setup components
         self.retriever = self._setup_retriever()
         self.llm = self._setup_llm()
+        self.structured_llm_router = self.llm.with_structured_output(
+            RouteQuery, method="json_schema"
+        )
         self.memory = MemorySaver()
 
         # Create graph
@@ -57,7 +44,14 @@ class SHRAGPipeline:
         workflow.add_node("answer", self.call_model)
 
         # Add conditional edge based on skip_retrieval
-        workflow.set_entry_point("retrieve")
+        workflow.add_conditional_edges(
+            START,
+            self.route_question,
+            {
+                "retrieval": "retrieve",
+                "answer": "answer",
+            },
+        )
         workflow.add_edge("retrieve", "answer")
         workflow.add_edge("answer", END)
 
@@ -66,10 +60,43 @@ class SHRAGPipeline:
         self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
     def retrieve(self, state: RAGState, config: RunnableConfig):
-        if state.get("skip_retrieval"):
-            return {"context": state.get("context", [])}
         docs = self.retriever.invoke(state["input"], config)
         return {"context": docs}
+
+    def route_question(self, state: RAGState, config: RunnableConfig):
+        """
+        Route question to web search or RAG.
+
+        Args:
+            state (dict): The current graph state
+
+        Returns:
+            str: Next node to call
+        """
+
+        print("---ROUTE QUESTION---")
+        system = """You are an expert at routing a user question to a vectorstore or llm.
+        If you can answer the question based on the conversation history, return "answer".
+        If you need more information, return "retrieval"."""
+        context_messages = [(message.type, message.content) for message in state["messages"][1:]]
+        route_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                *context_messages,
+                (
+                    "user",
+                    "Can you answer the following question based on the conversation history? Question: {question}",
+                ),
+            ]
+        )
+        question_router = route_prompt | self.structured_llm_router
+        routing_result = question_router.invoke({"question": state["input"]}, config)
+        if routing_result.next_step == "answer":
+            print("---ROUTE QUESTION TO ANSWER GENERATION---")
+            return "answer"
+        elif routing_result.next_step == "retrieval":
+            print("---ROUTE QUESTION TO RAG---")
+            return "retrieval"
 
     async def call_model(self, state: RAGState, config: RunnableConfig):
         if not state["messages"]:
@@ -84,7 +111,7 @@ class SHRAGPipeline:
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
         messages = state["messages"] + prompt.messages
         response = await self.llm.ainvoke(messages, config)
-        return {"messages": response}
+        return {"messages": messages + [response]}
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
@@ -121,12 +148,9 @@ class SHRAGPipeline:
         return result["answer"], result["context"]
 
     async def astream_query(
-        self, question: str, thread_id: str, skip_retrieval: bool = False
+        self, question: str, thread_id: str
     ) -> Iterator[Union[List[Document], str]]:
-        input = {
-            "input": question,
-            "skip_retrieval": skip_retrieval,
-        }
+        input = {"input": question}
         config = {"configurable": {"thread_id": thread_id}}
         async for chunk in self.graph.astream(
             input=input, stream_mode=["updates", "messages"], config=config
@@ -139,13 +163,12 @@ class SHRAGPipeline:
                     if isinstance(message, AIMessage):
                         yield message.content
 
-    def stream_query(
-        self, question: str, thread_id: str, skip_retrieval: bool = False
-    ) -> Iterator[Union[List[Document], str]]:
+    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[List[Document], str]]:
         """Synchronous wrapper around astream_query"""
         print("Thread ID: ", thread_id)
+
         async def run_async():
-            async for chunk in self.astream_query(question, thread_id, skip_retrieval):
+            async for chunk in self.astream_query(question, thread_id):
                 yield chunk
 
         # Create and run event loop

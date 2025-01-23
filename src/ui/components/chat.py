@@ -13,32 +13,23 @@ def manage_chat():
     the user query along with the AI response.
     """
     thread_id = st.session_state["user_id"]
-    
-    # Add checkbox for using existing context
-    use_existing_context = False
-    if st.session_state.get(RELEVANT_DOCUMENTS):
-        use_existing_context = st.checkbox("Use existing context", value=False)
-    
-    prompt = st.session_state.get("user_input") or st.chat_input(
-        "Wie kann ich Dir heute helfen?"
-    )
+
+    prompt = st.session_state.get("user_input") or st.chat_input("Wie kann ich Dir heute helfen?")
     if prompt is not None:
         st.session_state.user_input = None
 
         with st.chat_message("user"):
             st.markdown(prompt)
-        st.session_state[UI_RENDERED_MESSAGES].append(
-            {"role": "user", "content": prompt}
-        )
+        st.session_state[UI_RENDERED_MESSAGES].append({"role": "user", "content": prompt})
 
         with st.chat_message("assistant"):
-            with st.status("Suche relevante Dokumente..." if not use_existing_context else "Generiere Antwort...", expanded=True) as status:
+            with st.status("Suche relevante Dokumente...", expanded=True) as status:
                 full_response = ""
-                
+
                 def response_generator():
                     nonlocal full_response
                     for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
-                        prompt, thread_id, skip_retrieval=use_existing_context
+                        prompt, thread_id
                     ):
                         if isinstance(chunk, list):  # This is the documents
                             st.session_state[RELEVANT_DOCUMENTS] = chunk
@@ -51,7 +42,7 @@ def manage_chat():
                     status.update(label="Fertig!", state="complete")
 
                 st.write_stream(response_generator())
-                
+
         st.session_state[UI_RENDERED_MESSAGES].append(
             {"role": "assistant", "content": full_response}
         )
