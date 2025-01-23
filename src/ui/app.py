@@ -74,7 +74,8 @@ def setup_page():
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
         render_example_queries()
-        st.session_state["user_id"] = uuid.uuid4()
+        if "user_id" not in st.session_state:
+            st.session_state["user_id"] = uuid.uuid4()
         if st.session_state[CONVERSATIONAL_PIPELINE] is None:
             st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(st.session_state["roles"])
     elif st.session_state["authentication_status"] is False:

@@ -20,6 +20,7 @@ from utils.config import get_config
 
 class InputState(TypedDict):
     input: str
+    skip_retrieval: bool
 
 
 class OutputState(TypedDict):
@@ -38,7 +39,7 @@ class SHRAGPipeline:
         self.system_prompt = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland."
             "You are given a question and a context of documents that are relevant to the question."
-            "You are to answer the question based on the context."
+            "You are to answer the question based on the context and the conversation history."
             "If you don't know the answer, 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.'."
             "Don't try to make up an answer."
             "Answer in German."
@@ -55,7 +56,7 @@ class SHRAGPipeline:
         workflow.add_node("retrieve", self.retrieve)
         workflow.add_node("answer", self.call_model)
 
-        # Add edges
+        # Add conditional edge based on skip_retrieval
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "answer")
         workflow.add_edge("answer", END)
@@ -65,6 +66,8 @@ class SHRAGPipeline:
         self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
     def retrieve(self, state: RAGState, config: RunnableConfig):
+        if state.get("skip_retrieval"):
+            return {"context": state.get("context", [])}
         docs = self.retriever.invoke(state["input"], config)
         return {"context": docs}
 
@@ -113,15 +116,16 @@ class SHRAGPipeline:
 
         return llm
 
-    def query(self, question: str) -> Tuple[str, List]:
-        result = self.graph.invoke({"input": question})
+    def query(self, question: str, skip_retrieval: bool = False) -> Tuple[str, List]:
+        result = self.graph.invoke({"input": question, "skip_retrieval": skip_retrieval})
         return result["answer"], result["context"]
 
     async def astream_query(
-        self, question: str, thread_id: str
+        self, question: str, thread_id: str, skip_retrieval: bool = False
     ) -> Iterator[Union[List[Document], str]]:
         input = {
             "input": question,
+            "skip_retrieval": skip_retrieval,
         }
         config = {"configurable": {"thread_id": thread_id}}
         async for chunk in self.graph.astream(
@@ -135,11 +139,13 @@ class SHRAGPipeline:
                     if isinstance(message, AIMessage):
                         yield message.content
 
-    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[List[Document], str]]:
+    def stream_query(
+        self, question: str, thread_id: str, skip_retrieval: bool = False
+    ) -> Iterator[Union[List[Document], str]]:
         """Synchronous wrapper around astream_query"""
-
+        print("Thread ID: ", thread_id)
         async def run_async():
-            async for chunk in self.astream_query(question, thread_id):
+            async for chunk in self.astream_query(question, thread_id, skip_retrieval):
                 yield chunk
 
         # Create and run event loop

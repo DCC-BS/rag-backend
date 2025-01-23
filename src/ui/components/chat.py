@@ -13,6 +13,12 @@ def manage_chat():
     the user query along with the AI response.
     """
     thread_id = st.session_state["user_id"]
+    
+    # Add checkbox for using existing context
+    use_existing_context = False
+    if st.session_state.get(RELEVANT_DOCUMENTS):
+        use_existing_context = st.checkbox("Use existing context", value=False)
+    
     prompt = st.session_state.get("user_input") or st.chat_input(
         "Wie kann ich Dir heute helfen?"
     )
@@ -26,12 +32,14 @@ def manage_chat():
         )
 
         with st.chat_message("assistant"):
-            with st.status("Suche relevante Dokumente...", expanded=True) as status:
+            with st.status("Suche relevante Dokumente..." if not use_existing_context else "Generiere Antwort...", expanded=True) as status:
                 full_response = ""
                 
                 def response_generator():
                     nonlocal full_response
-                    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(prompt, thread_id):
+                    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
+                        prompt, thread_id, skip_retrieval=use_existing_context
+                    ):
                         if isinstance(chunk, list):  # This is the documents
                             st.session_state[RELEVANT_DOCUMENTS] = chunk
                             status.update(label="Antwort generieren...", state="running")
