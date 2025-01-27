@@ -31,10 +31,14 @@ def manage_chat():
                     for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
                         prompt, thread_id
                     ):
-                        if isinstance(chunk, list):  # This is the documents
-                            st.session_state[RELEVANT_DOCUMENTS] = chunk
-                            status.update(label="Antwort generieren...", state="running")
-                            yield f"{len(chunk)} Dokumente gefunden \n\n"
+                        if isinstance(chunk, tuple):
+                            graph_state, graph_output = chunk
+                            status.update(label=graph_state, state="running")
+                            if isinstance(graph_output, list):
+                                st.session_state[RELEVANT_DOCUMENTS] = graph_output
+                                yield f"{len(graph_output)} Dokumente gefunden \n\n"
+                            else:
+                                yield graph_output + "\n"
                         else:
                             # This is the text chunk
                             full_response += str(chunk)

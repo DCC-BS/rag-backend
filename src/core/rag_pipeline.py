@@ -1,5 +1,5 @@
 import asyncio
-from typing import Iterator, List, Tuple, Union
+from typing import Iterator, List, Literal, Tuple, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
@@ -8,10 +8,19 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 
 from core.bento_embeddings import BentoMLReranker
 from core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
-from core.rag_states import InputState, OutputState, RAGState, RouteQuery
+from core.rag_states import (
+    GradeAnswer,
+    GradeDocuments,
+    GradeHallucination,
+    InputState,
+    OutputState,
+    RAGState,
+    RouteQuery,
+)
 from data.document_storage import get_lancedb_doc_store
 from utils.config import get_config
 
@@ -35,25 +44,36 @@ class SHRAGPipeline:
         self.structured_llm_router = self.llm.with_structured_output(
             RouteQuery, method="json_schema"
         )
+        self.structured_llm_grade_documents = self.llm.with_structured_output(
+            GradeDocuments, method="json_schema"
+        )
+        self.structured_llm_grade_hallucination = self.llm.with_structured_output(
+            GradeHallucination, method="json_schema"
+        )
+        self.structured_llm_grade_answer = self.llm.with_structured_output(
+            GradeAnswer, method="json_schema"
+        )
         self.memory = MemorySaver()
 
         # Create graph
         workflow = StateGraph(RAGState, input=InputState, output=OutputState)
         # Add nodes
+        workflow.add_node("route_question", self.route_question)
         workflow.add_node("retrieve", self.retrieve)
-        workflow.add_node("answer", self.call_model)
+        workflow.add_node("filter_documents", self.filter_documents)
+        workflow.add_node("transform_query", self.transform_query)
+        workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
+        workflow.add_node("grade_hallucination", self.grade_hallucination)
+        workflow.add_node("grade_answer", self.grade_answer)
+        workflow.add_node("generate_answer", self.generate_answer)
 
         # Add conditional edge based on skip_retrieval
-        workflow.add_conditional_edges(
-            START,
-            self.route_question,
-            {
-                "retrieval": "retrieve",
-                "answer": "answer",
-            },
-        )
-        workflow.add_edge("retrieve", "answer")
-        workflow.add_edge("answer", END)
+        workflow.add_edge(START, "route_question")
+        workflow.add_edge("retrieve", "filter_documents")
+        workflow.add_edge("filter_documents", "query_needs_rephrase")
+        workflow.add_edge("transform_query", "retrieve")
+        workflow.add_edge("generate_answer", "grade_hallucination")
+        workflow.add_edge("grade_hallucination", "grade_answer")
 
         # Compile graph
         self.graph = workflow.compile(checkpointer=self.memory)
@@ -63,7 +83,9 @@ class SHRAGPipeline:
         docs = self.retriever.invoke(state["input"], config)
         return {"context": docs}
 
-    def route_question(self, state: RAGState, config: RunnableConfig):
+    def route_question(
+        self, state: RAGState, config: RunnableConfig
+    ) -> Command[Literal["generate_answer", "retrieve"]]:
         """
         Route question to web search or RAG.
 
@@ -93,12 +115,178 @@ class SHRAGPipeline:
         routing_result = question_router.invoke({"question": state["input"]}, config)
         if routing_result.next_step == "answer":
             print("---ROUTE QUESTION TO ANSWER GENERATION---")
-            return "answer"
+            return Command(
+                update={"route_query": "answer"},
+                goto="generate_answer",
+            )
         elif routing_result.next_step == "retrieval":
             print("---ROUTE QUESTION TO RAG---")
-            return "retrieval"
+            return Command(
+                update={"route_query": "retrieval"},
+                goto="retrieve",
+            )
 
-    async def call_model(self, state: RAGState, config: RunnableConfig):
+    def grade_hallucination(
+        self, state: RAGState, config: RunnableConfig
+    ) -> Command[Literal["generate_answer", "grade_answer"]]:
+        """
+        Grade hallucination on retrieved documents and answer.
+        """
+        print("---GRADE HALLUCINATION---")
+        system = """You are a hallucination checker. You are given a list of retrieved documents and an answer.
+        You are to grade the answer based on the retrieved documents.
+        If the answer is not grounded in the retrieved documents, return 'yes'.
+        If the answer is grounded in the retrieved document, return 'no'.
+        """
+        hallucination_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                ("user", "Retrieved documents: {documents} \\n Answer: {answer}"),
+            ]
+        )
+        hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
+        hallucination_result = hallucination_grader.invoke(
+            {
+                "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
+                "answer": state["answer"],
+            },
+            config,
+        )
+        if hallucination_result.binary_score == "yes":
+            print("---HALLUCINATION DETECTED---")
+            return Command(
+                update={"hallucination_score": "yes"},
+                goto="generate_answer",
+            )
+        else:
+            print("---HALLUCINATION NOT DETECTED---")
+            return Command(
+                update={"hallucination_score": "no"},
+                goto="grade_answer",
+            )
+
+    def grade_answer(
+        self, state: RAGState, config: RunnableConfig
+    ) -> Command[Literal[END, "transform_query"]]:
+        """
+        Grade answer generation.
+        """
+        print("---GRADE ANSWER---")
+        system = """You are a grader assessing relevance of an answer to a user question. \n 
+            If the answer is relevant to the question, grade it as relevant. \n
+            It does not need to be a stringent test. The goal is to filter out erroneous answers    . \n
+            Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question."""
+        answer_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                ("user", "Answer: {answer} \\n User question: {question}"),
+            ]
+        )
+        answer_grader = answer_prompt | self.structured_llm_grade_answer
+        answer_result = answer_grader.invoke(
+            {"answer": state["answer"], "question": state["input"]}, config
+        )
+        if answer_result.binary_score == "yes":
+            print("---ANSWER IS RELEVANT---")
+            return Command(
+                update={"answer_score": "yes"},
+                goto=END,
+            )
+        else:
+            print("---ANSWER IS NOT RELEVANT---")
+            return Command(
+                update={"answer_score": "no"},
+                goto="transform_query",
+            )
+
+    def filter_documents(self, state: RAGState, config: RunnableConfig):
+        """
+        Filter retrieved documents based on relevance to the user question.
+
+        Args:
+            state (dict): The current graph state
+            config (dict): The configuration for the graph
+
+        Returns:
+            dict: The filtered documents
+        """
+        print("---FILTER DOCUMENTS---")
+        system = """You are a grader assessing relevance of a retrieved document to a user question. \n 
+            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
+            It does not need to be a stringent test. The goal is to filter out erroneous retrievals. \n
+            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
+        grade_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                ("user", "Retrieved document: {document} \\n User question: {question}"),
+            ]
+        )
+        grade_documents_llm = grade_prompt | self.structured_llm_grade_documents
+        question = state["input"]
+        relevant_documents = []
+        for doc in state["context"]:
+            grade_documents_result = grade_documents_llm.invoke(
+                {"document": doc.page_content, "question": question}, config
+            )
+            if grade_documents_result.binary_score == "no":
+                print(f"Document {doc.metadata['filename']} is not relevant to the question.")
+            else:
+                relevant_documents.append(doc)
+        return {"context": relevant_documents, "input": question}
+
+    def decide_if_query_needs_rewriting(
+        self, state: RAGState, config: RunnableConfig
+    ) -> Command[Literal["transform_query", "generate_answer"]]:
+        """
+        Decide if the query needs to be re-written.
+        """
+        print("---DECIDE IF QUERY NEEDS REWRITING---")
+        filtered_documents = state["context"]
+        if len(filtered_documents) == 0:
+            print("---QUERY NEEDS REWRITING---")
+            return Command(
+                update={"needs_rephrase": True},
+                goto="transform_query",
+            )
+        else:
+            print("---QUERY DOES NOT NEED REWRITING---")
+            return Command(
+                update={"needs_rephrase": False},
+                goto="generate_answer",
+            )
+
+    def transform_query(self, state: RAGState, config: RunnableConfig):
+        """
+        Transform the query to produce a better question.
+
+        Args:
+            state (dict): The current graph state
+
+        Returns:
+            state (dict): Updates question key with a re-phrased question
+        """
+
+        print("---TRANSFORM QUERY---")
+        system = """You a question re-writer that converts an input question to a better version that is optimized \n 
+            for vectorstore retrieval. Look at the input and try to reason about the underlying semantic intent / meaning."""
+        re_write_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                (
+                    "user",
+                    "Here is the initial question: \n\n {question} \n Formulate an improved question.",
+                ),
+            ]
+        )
+        question_rewriter = re_write_prompt | self.llm
+        question = state["input"]
+        documents = state["context"]
+
+        # Re-write question
+        better_question = question_rewriter.invoke({"question": question}, config)
+        return {"context": documents, "input": better_question}
+
+    async def generate_answer(self, state: RAGState, config: RunnableConfig):
         if not state["messages"]:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
@@ -111,7 +299,7 @@ class SHRAGPipeline:
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
         messages = state["messages"] + prompt.messages
         response = await self.llm.ainvoke(messages, config)
-        return {"messages": messages + [response]}
+        return {"messages": messages + [response], "answer": response.content}
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
@@ -149,7 +337,7 @@ class SHRAGPipeline:
 
     async def astream_query(
         self, question: str, thread_id: str
-    ) -> Iterator[Union[List[Document], str]]:
+    ) -> Iterator[Tuple[str, Union[List[Document], str]]]:
         input = {"input": question}
         config = {"configurable": {"thread_id": thread_id}}
         async for chunk in self.graph.astream(
@@ -157,7 +345,37 @@ class SHRAGPipeline:
         ):
             if "updates" == chunk[0]:
                 if "retrieve" in chunk[1]:
-                    yield chunk[1]["retrieve"]["context"]
+                    yield ("Relevante Dokumente gefunden", chunk[1]["retrieve"]["context"])
+                elif "route_question" in chunk[1]:
+                    yield (
+                        "Frage weitergeleitet",
+                        f"Frage an {chunk[1]['route_question']['route_query']} weitergeleitet.\n",
+                    )
+                elif "filter_documents" in chunk[1]:
+                    yield (
+                        "Dokumente gefiltert",
+                        f"{len(chunk[1]['filter_documents']['context'])} Dokumente sind relevant.\n",
+                    )
+                elif "transform_query" in chunk[1]:
+                    yield (
+                        "Frage umformuliert",
+                        f"Frage umformuliert: {chunk[1]['transform_query']['input']}\n",
+                    )
+                elif "query_needs_rephrase" in chunk[1]:
+                    yield (
+                        "Frage analysiert",
+                        f"Die Frage muss umformuliert werden: {chunk[1]['query_needs_rephrase']['needs_rephrase']}\n",
+                    )
+                elif "grade_hallucination" in chunk[1]:
+                    yield (
+                        "Halluzination überprüft",
+                        f"Antwort enthält Halluzinationen: {chunk[1]['grade_hallucination']['hallucination_score']}\n",
+                    )
+                elif "grade_answer" in chunk[1]:
+                    yield (
+                        "Antwort bewertet",
+                        f"Antwort ist relevant: {chunk[1]['grade_answer']['answer_score']}\n",
+                    )
             if "messages" == chunk[0]:
                 for message in chunk[1]:
                     if isinstance(message, AIMessage):
