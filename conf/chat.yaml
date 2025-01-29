@@ -1,0 +1,6 @@
+CHAT:
+  EXAMPLE_QUERIES:
+    - "Was für Angebote zur Familienergänzenden Tagesbetreuung gibt es?"
+    - "Ich habe meine Stelle verloren, was muss ich tun?"
+    - "Werden Beiträge der Hilflosenentschädigung von den Ansprüchen auf andere Sozialbeiträge abgezogen?"
+  DEFAULT_PROMPT: "Wie kann ich Dir heute helfen?" 
