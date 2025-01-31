@@ -32,12 +32,15 @@ class SHRAGPipeline:
         self.config = get_config()
         self.user_roles = user_roles
         self.system_prompt = (
-            "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland."
-            "You are given a question and a context of documents that are relevant to the question."
-            "You are to answer the question based on the context and the conversation history."
-            "If you don't know the answer, 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.'."
-            "Don't try to make up an answer."
-            "Answer in German."
+            "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
+            "You are given a question and a context of documents that are relevant to the question. "
+            "You are to answer the question based on the context and the conversation history. "
+            "If you don't know the answer, say 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.' "
+            "Don't try to make up an answer. "
+            "Answer in German. "
+            "For each statement in your answer, cite the source document using [filename] format at the end of the relevant sentence or paragraph. "
+            "If multiple documents support a statement, include all relevant citations like [doc1][doc2]. "
+            "Only cite documents that directly support your statements."
         )
 
         # Setup components
@@ -307,12 +310,20 @@ class SHRAGPipeline:
         if not state["messages"]:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
+        # Format context with document metadata for citations
+        formatted_context = []
+        for doc in state["context"]:
+            formatted_context.append(
+                f"Content: {doc.page_content}\n"
+                f"Source: {doc.metadata.get('filename', 'unknown')}"
+            )
+        context = "\n\n".join(formatted_context)
+
         template = ChatPromptTemplate(
             [
                 ("user", "Context: {context}\n\nQuestion: {input}"),
             ]
         )
-        context = "\n\n".join(doc.page_content for doc in state["context"])
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
         messages = state["messages"] + prompt.messages
         response = await self.llm.ainvoke(messages, config)
