@@ -38,7 +38,12 @@ sys.excepthook = handle_exception
 # Load initial configuration
 load_config()
 config = get_config()
-st.set_page_config(page_title=TITLE_NAME)
+st.set_page_config(
+    page_title=TITLE_NAME,
+    page_icon=":speech_balloon:",
+    initial_sidebar_state="auto",
+    menu_items=None,
+)
 authenticator = stauth.Authenticate(**config.LOGIN_CONFIG)
 
 

@@ -8,14 +8,16 @@ DOC_STORE:
   MAX_CHUNK_SIZE: 3000
   MIN_CHUNK_SIZE: 200
   SPLIT_OVERLAP: 400
+  DOCUMENT_DESCRIPTION: "Guidelines, laws, and regulations from the Swiss Social Security System"
 RETRIEVER:
   TYPE: "similarity" # similarity or mmr
-  FETCH_FOR_RERANKING: 50
+  FETCH_FOR_RERANKING: 20
   TOP_K: 5
+  MAX_RECURSION: 30
 EMBEDDINGS:
   API_URL: "http://localhost:50001"
 LLM:
-  MODEL: "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
+  MODEL: "Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   API_URL: "http://localhost:8000/v1"
   TEMPERATURE: 0.1
   MAX_TOKENS: 1000

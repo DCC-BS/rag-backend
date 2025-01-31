@@ -8,3 +8,7 @@ rag_pipeline.png
 conf/local/*
 __pycache__/
 *.log
+.ruff_cache
+feedback.csv
+.venv
+logs/

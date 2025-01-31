@@ -9,56 +9,80 @@ from utils.config import get_config
 
 def render_feedback_section():
     """
-    Render a feedback section for the user to provide feedback on the AI response.
+    Render compact feedback buttons (thumbs up/down) for the AI response.
+    Aligned to the right of the chat answer.
     """
-    config = get_config()  # Get config here
+    config = get_config()
 
     if (
         st.session_state[UI_RENDERED_MESSAGES]
         and st.session_state[UI_RENDERED_MESSAGES][-1]["role"] == "assistant"
     ):
-        with st.expander("Feedback geben", expanded=True):
-            col1, col2 = st.columns([1, 3])
+        # Create a container with right-aligned content
+        with st.container():
+            col1, col2, col3 = st.columns([6, 0.5, 0.5])
 
-            with col1:
-                is_helpful = st.radio(
-                    "War die Antwort hilfreich?", ["Yes", "No"], key="feedback_helpful"
-                )
+            with col2:
+                if st.button("👍", key="thumbs_up"):
+                    feedback_data = {
+                        "helpful": "Yes",
+                        "reason": "",
+                        "feedback": "",
+                        "query": st.session_state[UI_RENDERED_MESSAGES][-2]["content"],
+                        "response": st.session_state[UI_RENDERED_MESSAGES][-1]["content"],
+                        "user": st.session_state["name"],
+                        "model": config.LLM.MODEL,
+                        "retriever": config.RETRIEVER,
+                        "doc_store": config.DOC_STORE,
+                    }
+                    save_feedback(feedback_data)
+                    st.success("Danke für dein Feedback!")
 
-            feedback_data = {
-                "helpful": is_helpful,
-                "reason": "",
-                "feedback": "",
-                "query": st.session_state[UI_RENDERED_MESSAGES][-2]["content"],
-                "response": st.session_state[UI_RENDERED_MESSAGES][-1]["content"],
-                "user": st.session_state["name"],
-                "model": config.LLM.MODEL,
-                "retriever": config.RETRIEVER,
-                "doc_store": config.DOC_STORE,
-            }
+            with col3:
+                if st.button("👎", key="thumbs_down"):
+                    st.session_state["show_feedback_form"] = True
+                    st.session_state["feedback_submitted"] = False
 
-            if is_helpful == "No":
-                with col2:
-                    feedback_data["reason"] = st.multiselect(
+        if st.session_state.get("show_feedback_form", False) and not st.session_state.get(
+            "feedback_submitted", False
+        ):
+            with st.container():
+                with st.form("feedback_form"):
+                    st.write("### Detailliertes Feedback")
+                    reason = st.multiselect(
                         "Das ist schief gelaufen:",
                         [
                             "Kontext enthielt die korrekte Antwort, AI fand diese nicht",
                             "Kontext enthielt die korrekte Antwort nicht",
                             "Falsche Antwort",
-                            "Antwort zu knapp / relevante Info weggelessen"
+                            "Antwort zu knapp / relevante Info weggelessen",
                             "Antwort zu lange",
                             "Anderes",
                         ],
                         key="feedback_reason",
                         placeholder="Grund auswählen",
                     )
-                    feedback_data["feedback"] = st.text_area(
-                        "Zusätzliches Feedback (optional):"
-                    )
 
-            if st.button("Feedback senden", key="feedback_submit"):
-                save_feedback(feedback_data)
-                st.success("Danke für deinFeedback!")
+                    additional_feedback = st.text_area("Zusätzliches Feedback (optional):")
+                    submitted = st.form_submit_button("Feedback senden")
+
+                    if submitted:
+                        feedback_data = {
+                            "helpful": "No",
+                            "reason": reason,
+                            "feedback": additional_feedback,
+                            "query": st.session_state[UI_RENDERED_MESSAGES][-2]["content"],
+                            "response": st.session_state[UI_RENDERED_MESSAGES][-1]["content"],
+                            "user": st.session_state["name"],
+                            "model": config.LLM.MODEL,
+                            "retriever": config.RETRIEVER,
+                            "doc_store": config.DOC_STORE,
+                        }
+                        save_feedback(feedback_data)
+                        st.session_state["feedback_submitted"] = True
+                        st.session_state["show_feedback_form"] = False
+                        st.success("Danke für dein Feedback!")
+                        st.rerun()
 
 
 def save_feedback(feedback_data):

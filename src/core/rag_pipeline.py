@@ -1,9 +1,11 @@
 import asyncio
+import re
 from typing import Iterator, List, Literal, Tuple, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -41,6 +43,7 @@ class SHRAGPipeline:
         # Setup components
         self.retriever = self._setup_retriever()
         self.llm = self._setup_llm()
+        self.query_rewriter_llm = self._setup_llm(temperature=0.8)
         self.structured_llm_router = self.llm.with_structured_output(
             RouteQuery, method="json_schema"
         )
@@ -267,23 +270,37 @@ class SHRAGPipeline:
         """
 
         print("---TRANSFORM QUERY---")
-        system = """You a question re-writer that converts an input question to a better version that is optimized \n 
-            for vectorstore retrieval. Look at the input and try to reason about the underlying semantic intent / meaning."""
+        system = """You are an expert question re-writer that converts an input question to a better version that is optimized 
+            for vectorstore retrieval. Look at the input and try to reason about the underlying semantic intent / meaning.
+            The vectorstore contains documents from this domain: {document_description}.
+            Write the re-phrased retrieval query in German as a question enclosed in <query> tags.
+            The re-phrased question should be a question that can be answered by the vectorstore.
+            The re-phrased question must be relevant to the initial user's question and keep the same meaning and intent.
+            
+            For example, if the input question is "Kindergeld", the re-phrased query should be 
+            <query>Habe ich Anspruch auf Kindergeld?</query>.
+            """
         re_write_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
                 (
                     "user",
-                    "Here is the initial question: \n\n {question} \n Formulate an improved question.",
+                    "Here is the initial question: \n\n {question} \n Formulate an improved query enclosed in <query> tags.",
                 ),
             ]
         )
-        question_rewriter = re_write_prompt | self.llm
+        question_rewriter = re_write_prompt | self.query_rewriter_llm | StrOutputParser()
         question = state["input"]
         documents = state["context"]
+        document_description = self.config.DOC_STORE.DOCUMENT_DESCRIPTION
 
         # Re-write question
-        better_question = question_rewriter.invoke({"question": question}, config)
+        better_question = question_rewriter.invoke(
+            {"question": question, "document_description": document_description}, config
+        )
+        # Keep only content between <query> and </query> tags
+        better_question = re.search(r"<query>(.*?)</query>", better_question).group(1)
+
         return {"context": documents, "input": better_question}
 
     async def generate_answer(self, state: RAGState, config: RunnableConfig):
@@ -320,10 +337,11 @@ class SHRAGPipeline:
         )
         return retriever
 
-    def _setup_llm(self):
+    def _setup_llm(self, temperature: float = None):
+        temperature = temperature or self.config.LLM.TEMPERATURE
         llm = ChatOpenAI(
             model_name=self.config.LLM.MODEL,
-            temperature=self.config.LLM.TEMPERATURE,
+            temperature=temperature,
             openai_api_key="None",
             openai_api_base=self.config.LLM.API_URL,
             max_tokens=self.config.LLM.MAX_TOKENS,
@@ -339,7 +357,8 @@ class SHRAGPipeline:
         self, question: str, thread_id: str
     ) -> Iterator[Tuple[str, Union[List[Document], str]]]:
         input = {"input": question}
-        config = {"configurable": {"thread_id": thread_id}}
+        recursion_limit = self.config.RETRIEVER.MAX_RECURSION
+        config = {"recursion_limit": recursion_limit, "configurable": {"thread_id": thread_id}}
         async for chunk in self.graph.astream(
             input=input, stream_mode=["updates", "messages"], config=config
         ):
