@@ -4,13 +4,13 @@ from pathlib import Path
 
 from rich.traceback import install
 
-from src.utils.config import load_config
+from utils.config import load_config
 
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
 
-from src.data.document_storage import create_lancedb_document_store
-from src.utils.logging import setup_logger
+from data.document_storage import create_lancedb_document_store
+from utils.logging import setup_logger
 
 # Configure rich traceback for unhandled exceptions
 install(show_locals=True)

@@ -7,6 +7,7 @@ from PyPDF2 import PdfReader, PdfWriter
 
 
 def render_pdf(file_path: str, page_number: int) -> str:
+    file_path = "../" + file_path
     if not os.path.exists(file_path):
         raise ValueError(f"File path {file_path} does not exist")
 
@@ -14,9 +15,7 @@ def render_pdf(file_path: str, page_number: int) -> str:
         pdf_reader = PdfReader(f)
 
         if page_number < 1 or page_number > len(pdf_reader.pages):
-            raise ValueError(
-                f"Invalid page number. The PDF has {len(pdf_reader.pages)} pages."
-            )
+            raise ValueError(f"Invalid page number. The PDF has {len(pdf_reader.pages)} pages.")
 
         page = pdf_reader.pages[page_number - 1]
 
@@ -28,7 +27,9 @@ def render_pdf(file_path: str, page_number: int) -> str:
 
         b64 = base64.b64encode(output.getvalue()).decode()
 
-        href = f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800px'></iframe>"
+        href = (
+            f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800px'></iframe>"
+        )
 
         return href
 

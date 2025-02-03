@@ -18,9 +18,7 @@ def setup_logger(log_file_path="logs/app.log"):
     logger = logging.getLogger("RAG-Bot")
     logger.setLevel(logging.DEBUG)
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     file_handler = RotatingFileHandler(
         log_file_path, maxBytes=1024 * 1024 * 5, backupCount=3

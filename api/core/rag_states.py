@@ -1,4 +1,3 @@
-import operator
 from typing import Annotated, List, Literal, Optional, Sequence
 
 from langchain.schema import Document

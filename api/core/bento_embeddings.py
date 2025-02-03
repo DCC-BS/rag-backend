@@ -4,9 +4,8 @@ from typing import Dict, List
 import bentoml
 import numpy as np
 import pyarrow as pa
-from langchain_core.embeddings import Embeddings
-
 from lancedb.rerankers import Reranker
+from langchain_core.embeddings import Embeddings
 
 
 class BentoEmbeddings(Embeddings):
@@ -136,12 +135,8 @@ class BentoMLReranker(Reranker):
         if self.score == "relevance":
             combined_results = self._keep_relevance_score(combined_results)
         elif self.score == "all":
-            raise NotImplementedError(
-                "return_score='all' not implemented for BentoML Reranker"
-            )
-        combined_results = combined_results.sort_by(
-            [("_relevance_score", "descending")]
-        )
+            raise NotImplementedError("return_score='all' not implemented for BentoML Reranker")
+        combined_results = combined_results.sort_by([("_relevance_score", "descending")])
         return combined_results
 
     def rerank_vector(self, query: str, vector_results: pa.Table) -> pa.Table:

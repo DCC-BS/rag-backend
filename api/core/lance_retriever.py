@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 from typing import List
 
+from lancedb.db import Table
+from lancedb.rerankers import Reranker
 from langchain.schema import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
-
-from lancedb.db import Table
-from lancedb.rerankers import Reranker
 
 
 @dataclass
@@ -40,6 +39,5 @@ class LanceDBRetriever(BaseRetriever):
             .to_list()
         )
         return [
-            Document(page_content=result["text"], metadata=result["metadata"])
-            for result in results
+            Document(page_content=result["text"], metadata=result["metadata"]) for result in results
         ]

@@ -1,7 +1,5 @@
 data   
-!src/data
-venv
-.env
+!api/data
 __pychache__
 lancedb
 rag_pipeline.png
@@ -10,5 +8,5 @@ __pycache__/
 *.log
 .ruff_cache
 feedback.csv
-.venv
-logs/
+api/.venv
+api/logs/
