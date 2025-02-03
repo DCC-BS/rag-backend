@@ -370,44 +370,50 @@ class SHRAGPipeline:
         input = {"input": question}
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
         config = {"recursion_limit": recursion_limit, "configurable": {"thread_id": thread_id}}
+
+        # Create a mapping from node update keys to handler functions.
+        update_handlers = {
+            "retrieve": lambda data: ("Relevante Dokumente gefunden", data.get("context")),
+            "route_question": lambda data: (
+                "Frage weitergeleitet",
+                f"Frage an {data.get('route_query')} weitergeleitet.\n",
+            ),
+            "filter_documents": lambda data: (
+                "Dokumente gefiltert",
+                f"{len(data.get('context', []))} Dokumente sind relevant.\n",
+            ),
+            "transform_query": lambda data: (
+                "Frage umformuliert",
+                f"Frage umformuliert: {data.get('input')}\n",
+            ),
+            "query_needs_rephrase": lambda data: (
+                "Frage analysiert",
+                f"Die Frage muss umformuliert werden: {data.get('needs_rephrase')}\n",
+            ),
+            "grade_hallucination": lambda data: (
+                "Halluzination überprüft",
+                f"Antwort enthält Halluzinationen: {data.get('hallucination_score')}\n",
+            ),
+            "grade_answer": lambda data: (
+                "Antwort bewertet",
+                f"Antwort ist relevant: {data.get('answer_score')}\n",
+            ),
+        }
+
         async for chunk in self.graph.astream(
             input=input, stream_mode=["updates", "messages"], config=config
         ):
-            if "updates" == chunk[0]:
-                if "retrieve" in chunk[1]:
-                    yield ("Relevante Dokumente gefunden", chunk[1]["retrieve"]["context"])
-                elif "route_question" in chunk[1]:
-                    yield (
-                        "Frage weitergeleitet",
-                        f"Frage an {chunk[1]['route_question']['route_query']} weitergeleitet.\n",
-                    )
-                elif "filter_documents" in chunk[1]:
-                    yield (
-                        "Dokumente gefiltert",
-                        f"{len(chunk[1]['filter_documents']['context'])} Dokumente sind relevant.\n",
-                    )
-                elif "transform_query" in chunk[1]:
-                    yield (
-                        "Frage umformuliert",
-                        f"Frage umformuliert: {chunk[1]['transform_query']['input']}\n",
-                    )
-                elif "query_needs_rephrase" in chunk[1]:
-                    yield (
-                        "Frage analysiert",
-                        f"Die Frage muss umformuliert werden: {chunk[1]['query_needs_rephrase']['needs_rephrase']}\n",
-                    )
-                elif "grade_hallucination" in chunk[1]:
-                    yield (
-                        "Halluzination überprüft",
-                        f"Antwort enthält Halluzinationen: {chunk[1]['grade_hallucination']['hallucination_score']}\n",
-                    )
-                elif "grade_answer" in chunk[1]:
-                    yield (
-                        "Antwort bewertet",
-                        f"Antwort ist relevant: {chunk[1]['grade_answer']['answer_score']}\n",
-                    )
-            if "messages" == chunk[0]:
-                for message in chunk[1]:
+            kind, content = chunk
+            if kind == "updates":
+                # Each update may include outputs from one or several nodes.
+                for key, update in content.items():
+                    if key in update_handlers:
+                        yield update_handlers[key](update)
+                    else:
+                        # Provide a fallback for new/unknown updates.
+                        yield (f"Update {key} erhalten", str(update))
+            elif kind == "messages":
+                for message in content:
                     if isinstance(message, AIMessage):
                         yield message.content
 
