@@ -388,15 +388,15 @@ class SHRAGPipeline:
             ),
             "query_needs_rephrase": lambda data: (
                 "Frage analysiert",
-                f"Die Frage muss umformuliert werden: {data.get('needs_rephrase')}\n",
+                f"Die Frage muss umformuliert werden: {'Ja' if data.get('needs_rephrase') else 'Nein'}\n",
             ),
             "grade_hallucination": lambda data: (
                 "Halluzination überprüft",
-                f"Antwort enthält Halluzinationen: {data.get('hallucination_score')}\n",
+                f"Antwort enthält Halluzinationen: {'Ja' if data.get('hallucination_score') else 'Nein'}\n",
             ),
             "grade_answer": lambda data: (
                 "Antwort bewertet",
-                f"Antwort ist relevant: {data.get('answer_score')}\n",
+                f"Antwort ist relevant: {'Ja' if data.get('answer_score') else 'Nein'}\n",
             ),
         }
 
