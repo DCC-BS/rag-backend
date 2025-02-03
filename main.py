@@ -1,15 +1,16 @@
 import os
 import sys
+from pathlib import Path
 
 from rich.traceback import install
 
-from config import load_config
+from src.utils.config import load_config
 
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
 
-from document_storage import create_lancedb_document_store
-from log_config import setup_logger
+from src.data.document_storage import create_lancedb_document_store
+from src.utils.logging import setup_logger
 
 # Configure rich traceback for unhandled exceptions
 install(show_locals=True)
@@ -23,13 +24,30 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical(
-        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
-    )
+    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
 sys.excepthook = handle_exception
 
+
+def main():
+    """
+    Main function to create and populate the document store.
+    """
+    # Load configuration
+    config = load_config()
+
+    # Create logs directory if it doesn't exist
+    Path("logs").mkdir(exist_ok=True)
+
+    # Create data directory if it doesn't exist
+    os.makedirs(config.DOC_STORE.PATH, exist_ok=True)
+
+    # Create and populate document store
+    logger.info("Creating document store...")
+    vector_store = create_lancedb_document_store()
+    logger.info("Document store created successfully")
+
+
 if __name__ == "__main__":
-    load_config()
-    create_lancedb_document_store()
+    main()
