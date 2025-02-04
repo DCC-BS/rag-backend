@@ -16,10 +16,8 @@ def process_citations(text, relevant_docs):
         for doc in relevant_docs:
             if doc.metadata.get("filename", "").lower() == filename.lower():
                 tooltip_content = doc.page_content
-                # Optionally truncate long document content
                 if len(tooltip_content) > 200:
                     tooltip_content = tooltip_content[:200] + "..."
-                # Escape double quotes
                 tooltip_content = tooltip_content.replace('"', "&quot;")
                 return f'<span title="{tooltip_content}" style="border-bottom: 1px dotted #000; cursor: help;">[{filename}]</span>'
         return match.group(0)
@@ -76,6 +74,7 @@ def manage_chat():
             st.session_state[UI_RENDERED_MESSAGES].append(
                 {"role": "assistant", "content": full_response, "flow_updates": flow_updates}
             )
+            st.rerun()
 
 
 def render_example_queries():

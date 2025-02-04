@@ -1,12 +1,17 @@
 from dataclasses import dataclass
-from typing import List
+from typing import Any
 
-from lancedb.db import Table
-from lancedb.rerankers import Reranker
+from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.schema import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
+from typing_extensions import override
+
+from lancedb.db import Table
+from lancedb.rerankers import Reranker
+
+# pyright: basic
 
 
 @dataclass
@@ -26,9 +31,12 @@ class LanceDBRetriever(BaseRetriever):
         default_factory=LanceDBRetrieverConfig, description="Retriever configuration"
     )
 
-    def _get_relevant_documents(self, query: str) -> List[Document]:
-        vector = self.embeddings.embed_query(query)
-        results = (
+    @override
+    def _get_relevant_documents(
+        self, query: str, run_manager: CallbackManagerForRetrieverRun | None = None
+    ) -> list[Document]:
+        vector: list[float] = self.embeddings.embed_query(text=query)
+        results: list[dict[Any, Any]] = (
             self.table.search(query_type="hybrid")
             .vector(vector)
             .text(query)

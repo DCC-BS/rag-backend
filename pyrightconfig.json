@@ -1,0 +1,19 @@
+{
+    "include": [
+        "api"
+    ],
+    "exclude": [
+        "**/__pycache__",
+    ],
+    "defineConstant": {
+        "DEBUG": true
+    },
+    "typeCheckingMode": "standard",
+    "pythonVersion": "3.12",
+    "pythonPlatform": "Linux",
+    "executionEnvironments": [
+        {
+            "root": "./api"
+        }
+    ]
+}

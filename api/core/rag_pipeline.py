@@ -1,6 +1,7 @@
 import asyncio
 import re
-from typing import Iterator, List, Literal, Tuple, Union
+from collections.abc import Iterator
+from typing import Literal, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
@@ -11,6 +12,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
+from omegaconf.listconfig import ListConfig
+from omegaconf.omegaconf import DictConfig
 
 from core.bento_embeddings import BentoMLReranker
 from core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
@@ -28,10 +31,10 @@ from utils.config import get_config
 
 
 class SHRAGPipeline:
-    def __init__(self, user_roles: List[str]) -> None:
-        self.config = get_config()
-        self.user_roles = user_roles
-        self.system_prompt = (
+    def __init__(self, user_roles: list[str]) -> None:
+        self.config: DictConfig | ListConfig = get_config()
+        self.user_roles: list[str] = user_roles
+        self.system_prompt: str = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
             "You are given a question and a context of documents that are relevant to the question. "
             "You are to answer the question based on the context and the conversation history. "
@@ -59,15 +62,18 @@ class SHRAGPipeline:
         self.structured_llm_grade_answer = self.llm.with_structured_output(
             GradeAnswer, method="json_schema"
         )
-        self.memory = MemorySaver()
+        self.memory: MemorySaver = MemorySaver()
 
         # Create graph
-        workflow = StateGraph(RAGState, input=InputState, output=OutputState)
+        workflow: StateGraph = StateGraph(
+            state_schema=RAGState, input=InputState, output=OutputState
+        )
         # Add nodes
         workflow.add_node("route_question", self.route_question)
         workflow.add_node("retrieve", self.retrieve)
         workflow.add_node("filter_documents", self.filter_documents)
         workflow.add_node("transform_query", self.transform_query)
+
         workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
         workflow.add_node("grade_hallucination", self.grade_hallucination)
         workflow.add_node("grade_answer", self.grade_answer)
@@ -118,7 +124,7 @@ class SHRAGPipeline:
             ]
         )
         question_router = route_prompt | self.structured_llm_router
-        routing_result = question_router.invoke({"question": state["input"]}, config)
+        routing_result: RouteQuery = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
         if routing_result.next_step == "answer":
             print("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(
@@ -131,6 +137,8 @@ class SHRAGPipeline:
                 update={"route_query": "retrieval"},
                 goto="retrieve",
             )
+        else:
+            raise ValueError(f"Unexpected routing next step: {routing_result.next_step}")
 
     def grade_hallucination(
         self, state: RAGState, config: RunnableConfig
@@ -151,36 +159,36 @@ class SHRAGPipeline:
             ]
         )
         hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
-        hallucination_result = hallucination_grader.invoke(
+        hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
                 "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
                 "answer": state["answer"],
             },
             config,
-        )
+        )  # pyright: ignore[reportAssignmentType]
         if hallucination_result.binary_score == "yes":
             print("---HALLUCINATION DETECTED---")
             return Command(
-                update={"hallucination_score": "yes"},
+                update={"hallucination_score": True},
                 goto="generate_answer",
             )
         else:
             print("---HALLUCINATION NOT DETECTED---")
             return Command(
-                update={"hallucination_score": "no"},
+                update={"hallucination_score": False},
                 goto="grade_answer",
             )
 
     def grade_answer(
         self, state: RAGState, config: RunnableConfig
-    ) -> Command[Literal[END, "transform_query"]]:
+    ) -> Command[Literal[END, "transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
         """
         Grade answer generation.
         """
         print("---GRADE ANSWER---")
         system = """You are a grader assessing relevance of an answer to a user question. \n 
             If the answer is relevant to the question, grade it as relevant. \n
-            It does not need to be a stringent test. The goal is to filter out erroneous answers    . \n
+            It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
             Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question."""
         answer_prompt = ChatPromptTemplate.from_messages(
             [
@@ -189,19 +197,20 @@ class SHRAGPipeline:
             ]
         )
         answer_grader = answer_prompt | self.structured_llm_grade_answer
-        answer_result = answer_grader.invoke(
+        answer_result: GradeAnswer = answer_grader.invoke(
             {"answer": state["answer"], "question": state["input"]}, config
-        )
+        )  # pyright: ignore[reportAssignmentType]
         if answer_result.binary_score == "yes":
             print("---ANSWER IS RELEVANT---")
+
             return Command(
-                update={"answer_score": "yes"},
+                update={"answer_score": True},
                 goto=END,
             )
         else:
             print("---ANSWER IS NOT RELEVANT---")
             return Command(
-                update={"answer_score": "no"},
+                update={"answer_score": False},
                 goto="transform_query",
             )
 
@@ -228,12 +237,12 @@ class SHRAGPipeline:
             ]
         )
         grade_documents_llm = grade_prompt | self.structured_llm_grade_documents
-        question = state["input"]
-        relevant_documents = []
-        for doc in state["context"]:
-            grade_documents_result = grade_documents_llm.invoke(
+        question: str = state["input"]
+        relevant_documents: list[Document] = []
+        for doc in state["context"]:  # pyright: ignore[reportOptionalIterable]
+            grade_documents_result: GradeDocuments = grade_documents_llm.invoke(
                 {"document": doc.page_content, "question": question}, config
-            )
+            )  # pyright: ignore[reportAssignmentType]
             if grade_documents_result.binary_score == "no":
                 print(f"Document {doc.metadata['filename']} is not relevant to the question.")
             else:
@@ -247,13 +256,14 @@ class SHRAGPipeline:
         Decide if the query needs to be re-written.
         """
         print("---DECIDE IF QUERY NEEDS REWRITING---")
-        filtered_documents = state["context"]
+        filtered_documents: list[Document] = state["context"]  # pyright: ignore[reportOptionalIterable, reportAssignmentType]
         if len(filtered_documents) == 0:
             print("---QUERY NEEDS REWRITING---")
             return Command(
                 update={"needs_rephrase": True},
                 goto="transform_query",
             )
+
         else:
             print("---QUERY DOES NOT NEED REWRITING---")
             return Command(
@@ -311,13 +321,14 @@ class SHRAGPipeline:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
         # Format context with document metadata for citations
-        formatted_context = []
-        for doc in state["context"]:
+        formatted_context: list[str] = []
+        for doc in state["context"]:  # pyright: ignore[reportOptionalIterable]
             formatted_context.append(
                 f"Content: {doc.page_content}\n"
                 f"Source: {doc.metadata.get('filename', 'unknown')}"
             )
-        context = "\n\n".join(formatted_context)
+
+        context: str = "\n\n".join(formatted_context)
 
         template = ChatPromptTemplate(
             [
@@ -325,7 +336,7 @@ class SHRAGPipeline:
             ]
         )
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
-        messages = state["messages"] + prompt.messages
+        messages = state["messages"] + prompt.messages  # pyright: ignore
         response = await self.llm.ainvoke(messages, config)
         return {"messages": messages + [response], "answer": response.content}
 
@@ -360,13 +371,15 @@ class SHRAGPipeline:
 
         return llm
 
-    def query(self, question: str, skip_retrieval: bool = False) -> Tuple[str, List]:
+    def query(
+        self, question: str, skip_retrieval: bool = False
+    ) -> tuple[str, list[tuple[str, Document]]]:
         result = self.graph.invoke({"input": question, "skip_retrieval": skip_retrieval})
         return result["answer"], result["context"]
 
     async def astream_query(
         self, question: str, thread_id: str
-    ) -> Iterator[Tuple[str, Union[List[Document], str]]]:
+    ) -> Iterator[tuple[str, Union[list[Document], str]]]:
         input = {"input": question}
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
         config = {"recursion_limit": recursion_limit, "configurable": {"thread_id": thread_id}}
@@ -417,7 +430,7 @@ class SHRAGPipeline:
                     if isinstance(message, AIMessage):
                         yield message.content
 
-    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[List[Document], str]]:
+    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[list[Document], str]]:
         """Synchronous wrapper around astream_query"""
         print("Thread ID: ", thread_id)
 

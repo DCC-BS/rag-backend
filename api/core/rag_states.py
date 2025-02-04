@@ -1,4 +1,5 @@
-from typing import Annotated, List, Literal, Optional, Sequence
+from collections.abc import Sequence
+from typing import Annotated, Literal
 
 from langchain.schema import Document
 from langchain_core.messages import BaseMessage
@@ -23,12 +24,12 @@ class RouteQuery(BaseModel):
 
 class OutputState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    context: Optional[List[Document]]
-    answer: Optional[str]
-    hallucination_score: Optional[Literal["yes", "no"]]
-    answer_score: Optional[Literal["yes", "no"]]
-    needs_rephrase: Optional[bool]
-    route_query: Optional[RouteQuery]
+    context: list[Document] | None
+    answer: str | None
+    hallucination_score: Literal["yes", "no"] | None
+    answer_score: Literal["yes", "no"] | None
+    needs_rephrase: bool | None
+    route_query: RouteQuery | None
 
 
 class RAGState(InputState, OutputState):

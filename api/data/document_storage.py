@@ -1,7 +1,7 @@
-import lancedb
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import LanceDB
 
+import lancedb
 from core.bento_embeddings import BentoEmbeddings
 from data.docling_loader import DoclingLoader
 from utils.config import load_config

@@ -1,25 +1,30 @@
 import asyncio
-from typing import Dict, List
+from typing import Any
 
 import bentoml
 import numpy as np
 import pyarrow as pa
-from lancedb.rerankers import Reranker
 from langchain_core.embeddings import Embeddings
+from typing_extensions import override
+
+from lancedb.rerankers import Reranker
+
+# pyright: basic, reportAttributeAccessIssue=none
 
 
 class BentoEmbeddings(Embeddings):
-    def __init__(self, api_url: str):
+    def __init__(self, api_url: str) -> None:
         """
         Initializes the BentoEmbeddings.
 
         Args:
             api_url: The URL of the BentoML API.
         """
-        self.api_url = api_url
+        self.api_url: str = api_url
         self.batch_size: int = 32
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    @override
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """
         Embeds a list of documents.
 
@@ -29,21 +34,21 @@ class BentoEmbeddings(Embeddings):
         Returns:
             A list of embeddings, one for each document.
         """
-        embeddings: List[List[float]] = []
-        with bentoml.SyncHTTPClient(self.api_url) as client:
+        embeddings: list[list[float]] = []
+        with bentoml.SyncHTTPClient(url=self.api_url) as client:
             if not client.is_ready():
                 raise RuntimeError(f"BentoML service at {self.api_url} is not ready.")
 
             for i in range(0, len(texts), self.batch_size):
-                batch = texts[i : i + self.batch_size]
-                batch_embeddings: np.ndarray = client.encode_documents(
+                batch: list[str] = texts[i : i + self.batch_size]
+                batch_embeddings: np.ndarray[Any, Any] = client.encode_documents(
                     documents=batch,
                 )
-                embeddings.extend(batch_embeddings.tolist())
+                embeddings.extend(batch_embeddings.tolist())  # pyright: ignore[reportArgumentType]
 
         return embeddings
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         """
         Embeds a single query.
 
@@ -53,14 +58,14 @@ class BentoEmbeddings(Embeddings):
         Returns:
             A list of floats representing the embedding.
         """
-        with bentoml.SyncHTTPClient(self.api_url) as client:
+        with bentoml.SyncHTTPClient(url=self.api_url) as client:
             if client.is_ready():
                 embeddings: np.ndarray = client.encode_queries(queries=[text])
                 return embeddings[0].tolist()
             else:
                 raise RuntimeError(f"BentoML service at {self.api_url} is not ready.")
 
-    async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         """
         Asynchronously embeds a list of documents.
 
@@ -70,20 +75,20 @@ class BentoEmbeddings(Embeddings):
         Returns:
             A list of embeddings, one for each document.
         """
-        embeddings: List[List[float]] = []
+        embeddings: list[list[float]] = []
         async with bentoml.AsyncHTTPClient(self.api_url) as client:
             if not await client.is_ready():
                 raise RuntimeError(f"BentoML service at {self.api_url} is not ready.")
 
-            async def embed_batch(batch: List[str]) -> List[List[float]]:
+            async def embed_batch(batch: list[str]) -> list[list[float]]:
                 batch_embeddings: np.ndarray = await client.encode_documents(
                     documents=batch,
                 )
-                return batch_embeddings.tolist()
+                return batch_embeddings.tolist()  # pyright: ignore[reportReturnType]
 
-            tasks = []
+            tasks: list[Any] = []
             for i in range(0, len(texts), self.batch_size):
-                batch = texts[i : i + self.batch_size]
+                batch: list[str] = texts[i : i + self.batch_size]
                 tasks.append(embed_batch(batch))
 
             results = await asyncio.gather(*tasks)
@@ -92,7 +97,7 @@ class BentoEmbeddings(Embeddings):
 
         return embeddings
 
-    async def aembed_query(self, text: str) -> List[float]:
+    async def aembed_query(self, text: str) -> list[float]:
         """
         Asynchronously embeds a single query.
 
@@ -102,7 +107,7 @@ class BentoEmbeddings(Embeddings):
         Returns:
             A list of floats representing the embedding.
         """
-        async with bentoml.AsyncHTTPClient(self.api_url) as client:
+        async with bentoml.AsyncHTTPClient(url=self.api_url) as client:
             if await client.is_ready():
                 embeddings: np.ndarray = await client.encode_queries(queries=[text])
                 return embeddings[0].tolist()
@@ -111,15 +116,15 @@ class BentoEmbeddings(Embeddings):
 
 
 class BentoMLReranker(Reranker):
-    def __init__(self, api_url, column, return_score="relevance"):
+    def __init__(self, api_url, column, return_score="relevance") -> None:
         super().__init__(return_score)
-        self.client = bentoml.SyncHTTPClient(api_url)
+        self.client = bentoml.SyncHTTPClient(url=api_url)
         self.column = column
 
     def _rerank(self, query: str, result_set: pa.Table) -> pa.Table:
         if self.client.is_ready():
             documents = result_set[self.column].to_pylist()
-            ranks: Dict = self.client.rerank(documents=documents, query=query)
+            ranks: dict = self.client.rerank(documents=documents, query=query)
             scores = [score for _, score, _ in ranks.values()]
             result_set = result_set.append_column(
                 "_relevance_score", pa.array(scores, type=pa.float32())
