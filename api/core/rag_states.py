@@ -10,14 +10,14 @@ from typing_extensions import TypedDict
 
 class InputState(TypedDict):
     input: str
-    skip_retrieval: bool
+    user_organization: str
 
 
 class RouteQuery(BaseModel):
     """Route a user query to retrieval or answer generation."""
 
     next_step: Literal["retrieval", "answer"] = Field(
-        ...,
+        default=...,
         description="Given a user question and a conversation history, choose to route it to a vectorstore or a llm.",
     )
 

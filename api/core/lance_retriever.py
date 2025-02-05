@@ -11,8 +11,6 @@ from typing_extensions import override
 from lancedb.db import Table
 from lancedb.rerankers import Reranker
 
-# pyright: basic
-
 
 @dataclass
 class LanceDBRetrieverConfig:
@@ -20,7 +18,6 @@ class LanceDBRetrieverConfig:
     vector_col: str = "vector"
     k: int = 5
     docs_before_rerank: int = 20
-    filter: str = ""
 
 
 class LanceDBRetriever(BaseRetriever):
@@ -32,20 +29,27 @@ class LanceDBRetriever(BaseRetriever):
     )
 
     @override
-    def _get_relevant_documents(
-        self, query: str, run_manager: CallbackManagerForRetrieverRun | None = None
+    def _get_relevant_documents(  # pyright: ignore
+        self,
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun,
+        user_organization: str,
     ) -> list[Document]:
+        filter: str = f"metadata.organization IN ('{user_organization}')"
         vector: list[float] = self.embeddings.embed_query(text=query)
+
         results: list[dict[Any, Any]] = (
             self.table.search(query_type="hybrid")
             .vector(vector)
-            .text(query)
-            .where(self.config.filter, prefilter=True)
-            .limit(self.config.docs_before_rerank)
-            .rerank(self.reranker)
-            .limit(self.config.k)
+            .text(text=query)
+            .where(where=filter, prefilter=True)
+            .limit(limit=self.config.docs_before_rerank)
+            .rerank(reranker=self.reranker)
+            .limit(limit=self.config.k)
             .to_list()
         )
         return [
-            Document(page_content=result["text"], metadata=result["metadata"]) for result in results
+            Document(page_content=result["text"], metadata=result["metadata"])
+            for result in results
         ]

@@ -5,6 +5,7 @@ from typing import Literal, Union
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
+from langchain_core.documents.base import Document
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
@@ -31,9 +32,8 @@ from utils.config import get_config
 
 
 class SHRAGPipeline:
-    def __init__(self, user_roles: list[str]) -> None:
+    def __init__(self) -> None:
         self.config: DictConfig | ListConfig = get_config()
-        self.user_roles: list[str] = user_roles
         self.system_prompt: str = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
             "You are given a question and a context of documents that are relevant to the question. "
@@ -80,19 +80,26 @@ class SHRAGPipeline:
         workflow.add_node("generate_answer", self.generate_answer)
 
         # Add conditional edge based on skip_retrieval
-        workflow.add_edge(START, "route_question")
-        workflow.add_edge("retrieve", "filter_documents")
-        workflow.add_edge("filter_documents", "query_needs_rephrase")
-        workflow.add_edge("transform_query", "retrieve")
-        workflow.add_edge("generate_answer", "grade_hallucination")
-        workflow.add_edge("grade_hallucination", "grade_answer")
+        workflow.add_edge(start_key=START, end_key="route_question")
+        workflow.add_edge(start_key="retrieve", end_key="filter_documents")
+        workflow.add_edge(start_key="filter_documents", end_key="query_needs_rephrase")
+        workflow.add_edge(start_key="transform_query", end_key="retrieve")
+        workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
+        workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
         # Compile graph
         self.graph = workflow.compile(checkpointer=self.memory)
         self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
-    def retrieve(self, state: RAGState, config: RunnableConfig):
-        docs = self.retriever.invoke(state["input"], config)
+    def retrieve(
+        self, state: RAGState, config: RunnableConfig
+    ) -> dict[str, list[Document]]:
+        docs: list[Document] = self.retriever.invoke(
+            input=state["input"],
+            user_organization=state["user_organization"],
+            config=config,
+        )
+
         return {"context": docs}
 
     def route_question(
@@ -112,7 +119,9 @@ class SHRAGPipeline:
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""
-        context_messages = [(message.type, message.content) for message in state["messages"][1:]]
+        context_messages = [
+            (message.type, message.content) for message in state["messages"][1:]
+        ]
         route_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
@@ -124,7 +133,9 @@ class SHRAGPipeline:
             ]
         )
         question_router = route_prompt | self.structured_llm_router
-        routing_result: RouteQuery = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
+        routing_result: RouteQuery = question_router.invoke(
+            {"question": state["input"]}, config
+        )  # pyright: ignore[reportAssignmentType]
         if routing_result.next_step == "answer":
             print("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(
@@ -138,7 +149,9 @@ class SHRAGPipeline:
                 goto="retrieve",
             )
         else:
-            raise ValueError(f"Unexpected routing next step: {routing_result.next_step}")
+            raise ValueError(
+                f"Unexpected routing next step: {routing_result.next_step}"
+            )
 
     def grade_hallucination(
         self, state: RAGState, config: RunnableConfig
@@ -158,10 +171,14 @@ class SHRAGPipeline:
                 ("user", "Retrieved documents: {documents} \\n Answer: {answer}"),
             ]
         )
-        hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
+        hallucination_grader = (
+            hallucination_prompt | self.structured_llm_grade_hallucination
+        )
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
-                "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
+                "documents": "\n\n".join(
+                    [doc.page_content for doc in state["context"]]
+                ),
                 "answer": state["answer"],
             },
             config,
@@ -181,7 +198,7 @@ class SHRAGPipeline:
 
     def grade_answer(
         self, state: RAGState, config: RunnableConfig
-    ) -> Command[Literal[END, "transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
+    ) -> Command[Literal["transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
         """
         Grade answer generation.
         """
@@ -233,7 +250,10 @@ class SHRAGPipeline:
         grade_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
-                ("user", "Retrieved document: {document} \\n User question: {question}"),
+                (
+                    "user",
+                    "Retrieved document: {document} \\n User question: {question}",
+                ),
             ]
         )
         grade_documents_llm = grade_prompt | self.structured_llm_grade_documents
@@ -244,7 +264,9 @@ class SHRAGPipeline:
                 {"document": doc.page_content, "question": question}, config
             )  # pyright: ignore[reportAssignmentType]
             if grade_documents_result.binary_score == "no":
-                print(f"Document {doc.metadata['filename']} is not relevant to the question.")
+                print(
+                    f"Document {doc.metadata['filename']} is not relevant to the question."
+                )
             else:
                 relevant_documents.append(doc)
         return {"context": relevant_documents, "input": question}
@@ -302,7 +324,9 @@ class SHRAGPipeline:
                 ),
             ]
         )
-        question_rewriter = re_write_prompt | self.query_rewriter_llm | StrOutputParser()
+        question_rewriter = (
+            re_write_prompt | self.query_rewriter_llm | StrOutputParser()
+        )
         question = state["input"]
         documents = state["context"]
         document_description = self.config.DOC_STORE.DOCUMENT_DESCRIPTION
@@ -335,7 +359,9 @@ class SHRAGPipeline:
                 ("user", "Context: {context}\n\nQuestion: {input}"),
             ]
         )
-        prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
+        prompt = await template.ainvoke(
+            {"context": context, "input": state["input"]}, config
+        )
         messages = state["messages"] + prompt.messages  # pyright: ignore
         response = await self.llm.ainvoke(messages, config)
         return {"messages": messages + [response], "answer": response.content}
@@ -354,7 +380,6 @@ class SHRAGPipeline:
                 fts_col=vector_store._text_key,
                 k=self.config.RETRIEVER.TOP_K,
                 docs_before_rerank=self.config.RETRIEVER.FETCH_FOR_RERANKING,
-                filter=f"metadata.organization IN ('{'\', \''.join(self.user_roles)}')",
             ),
         )
         return retriever
@@ -372,21 +397,33 @@ class SHRAGPipeline:
         return llm
 
     def query(
-        self, question: str, skip_retrieval: bool = False
+        self, question: str, user_organization: str, thread_id: str
     ) -> tuple[str, list[tuple[str, Document]]]:
-        result = self.graph.invoke({"input": question, "skip_retrieval": skip_retrieval})
+        result = self.graph.invoke(
+            {"input": question, "user_organization": user_organization},
+            config={"configurable": {"thread_id": thread_id}},
+        )
+
         return result["answer"], result["context"]
 
     async def astream_query(
-        self, question: str, thread_id: str
+        self, question: str, user_organization: str, thread_id: str
     ) -> Iterator[tuple[str, Union[list[Document], str]]]:
-        input = {"input": question}
+        input = {"input": question, "user_organization": user_organization}
+
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
-        config = {"recursion_limit": recursion_limit, "configurable": {"thread_id": thread_id}}
+
+        config = {
+            "recursion_limit": recursion_limit,
+            "configurable": {"thread_id": thread_id},
+        }
 
         # Create a mapping from node update keys to handler functions.
         update_handlers = {
-            "retrieve": lambda data: ("Relevante Dokumente gefunden", data.get("context")),
+            "retrieve": lambda data: (
+                "Relevante Dokumente gefunden",
+                data.get("context"),
+            ),
             "route_question": lambda data: (
                 "Frage weitergeleitet",
                 f"Frage an {data.get('route_query')} weitergeleitet.\n",
@@ -430,12 +467,14 @@ class SHRAGPipeline:
                     if isinstance(message, AIMessage):
                         yield message.content
 
-    def stream_query(self, question: str, thread_id: str) -> Iterator[Union[list[Document], str]]:
+    def stream_query(
+        self, question: str, user_roles: list[str], thread_id: str
+    ) -> Iterator[Union[list[Document], str]]:
         """Synchronous wrapper around astream_query"""
         print("Thread ID: ", thread_id)
 
         async def run_async():
-            async for chunk in self.astream_query(question, thread_id):
+            async for chunk in self.astream_query(question, user_roles, thread_id):
                 yield chunk
 
         # Create and run event loop

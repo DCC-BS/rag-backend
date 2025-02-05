@@ -24,7 +24,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+    logger.critical(
+        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
+    )
 
 
 sys.excepthook = handle_exception
@@ -45,7 +47,7 @@ def main():
 
     # Create and populate document store
     logger.info("Creating document store...")
-    vector_store = create_lancedb_document_store()
+    create_lancedb_document_store()
     logger.info("Document store created successfully")
 
 

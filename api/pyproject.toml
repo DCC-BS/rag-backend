@@ -25,6 +25,10 @@ dependencies = [
     "transformers>=4.47.0",
     "tantivy>=0.22.0",
     "langgraph>=0.2.63",
+    "fastapi>=0.115.8",
+    "pyjwt>=2.10.1",
+    "passlib[bcrypt]>=1.7.4",
+    "sqlmodel>=0.0.22",
 ]
 
 [project.optional-dependencies]
@@ -56,8 +60,39 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.ruff]
-# Same as Black.
-line-length = 100
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+fixable = ["ALL"]
+
+
+line-length = 88
 indent-width = 4
 
 # Assume Python 3.12
@@ -73,7 +108,7 @@ select = [
 ]
 
 # Ignore specific rules
-ignore = []
+ignore = ["E501"]
 
 [tool.ruff.format]
 # Use double quotes for strings.
@@ -87,6 +122,15 @@ skip-magic-trailing-comma = false
 
 # Automatically detect the appropriate line ending.
 line-ending = "auto"
+
+docstring-code-format = true
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 # Group imports by type (standard library, third-party, first-party).

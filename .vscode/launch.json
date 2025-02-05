@@ -5,12 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: FastAPI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "cwd": "${workspaceFolder}/api",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+            },
+            "args": [
+                "main:app",
+                "--reload",
+                "--port",
+                "8080"
+            ],
+            "jinja": true
+        },
+        {
             "name": "Python Debugger: Streamlit",
             "type": "debugpy",
             "request": "launch",
             "justMyCode": false,
             "module": "streamlit",
-            "env": {"PYTHONPATH": "${workspaceFolder}${pathSeparator}src${env:PYTHONPATH}"},
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+            },
             "args": [
                 "run",
                 "src/ui/app.py"
@@ -21,7 +40,9 @@
             "type": "python",
             "request": "launch",
             "module": "streamlit",
-            "env": {"PYTHONPATH": "${workspaceFolder}${pathSeparator}src${env:PYTHONPATH}"},
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+            },
             "args": [
                 "run",
                 "src/ui/app.py"
