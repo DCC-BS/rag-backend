@@ -27,12 +27,13 @@
             "request": "launch",
             "justMyCode": false,
             "module": "streamlit",
+            "cwd": "${workspaceFolder}/api",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
             },
             "args": [
                 "run",
-                "src/ui/app.py"
+                "ui/app.py"
             ],
         },
         {
@@ -40,12 +41,13 @@
             "type": "python",
             "request": "launch",
             "module": "streamlit",
+            "cwd": "${workspaceFolder}/api",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
             },
             "args": [
                 "run",
-                "src/ui/app.py"
+                "ui/app.py"
             ],
             "justMyCode": false
         }

@@ -8,7 +8,6 @@ from typing import (
     Annotated,
     Any,
     AsyncGenerator,
-    Generator,
     Literal,
 )
 
@@ -16,8 +15,6 @@ import bcrypt
 import jwt
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.applications import FastAPI
-from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -25,7 +22,6 @@ from jwt.exceptions import InvalidTokenError
 from langchain.schema import Document
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from starlette.responses import StreamingResponse
 
 from core.rag_pipeline import SHRAGPipeline
 
@@ -228,72 +224,36 @@ def document_to_dict(
     }
 
 
-@app.post(
-    "/query",
-    response_model=QueryResponse,
-)
-def query(
-    request: QueryRequest,
+@app.get("/stream_query")
+async def stream_query(
+    question: str,
     current_user: Annotated[
         User,
         Depends(get_current_user),
     ],
-):
+    thread_id: str = "default",
+) -> StreamingResponse:
     """
-    POST endpoint to run a query through the RAG pipeline synchronously.
+    GET endpoint to stream query events over text. This leverages the
+    asynchronous functionality provided by the pipeline.
     """
-    try:
-        (
-            answer,
-            context,
-        ) = state["pipeline"].query(
-            request.question,
-            current_user.organization,
-            "default",
-        )
-        context_dict: list[dict[str, Any]] = [document_to_dict(doc) for doc in context]
-        return {
-            "answer": answer,
-            "context": context_dict,
-        }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-        ) from e
+    async def event_generator() -> AsyncGenerator[str, Any]:
+        try:
+            async for event in state["pipeline"].astream_query(
+                question,
+                current_user.organization,
+                thread_id,
+            ):
+                yield f"{event}\n"
 
+        except Exception as e:
+            yield f"Error: {str(e)}\n"
 
-# @app.get("/stream_query")
-# async def stream_query(
-#     question: str,
-#     current_user: Annotated[
-#         User,
-#         Depends(get_current_user),
-#     ],
-#     thread_id: str = "default",
-# ) -> StreamingResponse:
-#     """
-#     GET endpoint to stream query events over text. This leverages the
-#     asynchronous functionality provided by the pipeline.
-#     """
-
-#     async def event_generator() -> AsyncGenerator[str, Any]:
-#         try:
-#             async for event in pipeline.astream_query(
-#                 question,
-#                 current_user.organization,
-#                 thread_id,
-#             ):
-#                 yield f"{event}\n"
-
-#         except Exception as e:
-#             yield f"Error: {str(e)}\n"
-
-#     return StreamingResponse(
-#         event_generator(),
-#         media_type="text/plain",
-#     )
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/plain",
+    )
 
 
 @app.post("/token")

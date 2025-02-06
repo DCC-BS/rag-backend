@@ -1,20 +1,20 @@
 import asyncio
 import re
 from collections.abc import Iterator
-from typing import Literal, Union
+from typing import AsyncIterator, Literal
 
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
-from langchain_core.documents.base import Document
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command
+from langgraph.types import Command, Interrupt, interrupt
 from omegaconf.listconfig import ListConfig
 from omegaconf.omegaconf import DictConfig
+from pydantic import SecretStr
 
 from core.bento_embeddings import BentoMLReranker
 from core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
@@ -73,7 +73,9 @@ class SHRAGPipeline:
         workflow.add_node("retrieve", self.retrieve)
         workflow.add_node("filter_documents", self.filter_documents)
         workflow.add_node("transform_query", self.transform_query)
-
+        workflow.add_node(
+            "user_review_rewritten_query", self.user_review_rewritten_query
+        )
         workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
         workflow.add_node("grade_hallucination", self.grade_hallucination)
         workflow.add_node("grade_answer", self.grade_answer)
@@ -83,7 +85,10 @@ class SHRAGPipeline:
         workflow.add_edge(start_key=START, end_key="route_question")
         workflow.add_edge(start_key="retrieve", end_key="filter_documents")
         workflow.add_edge(start_key="filter_documents", end_key="query_needs_rephrase")
-        workflow.add_edge(start_key="transform_query", end_key="retrieve")
+        workflow.add_edge(
+            start_key="transform_query", end_key="user_review_rewritten_query"
+        )
+        workflow.add_edge(start_key="user_review_rewritten_query", end_key="retrieve")
         workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
         workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
@@ -125,7 +130,7 @@ class SHRAGPipeline:
         route_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
-                *context_messages,
+                *context_messages,  # pyright: ignore[reportArgumentType]
                 (
                     "user",
                     "Can you answer the following question based on the conversation history? Question: {question}",
@@ -143,7 +148,7 @@ class SHRAGPipeline:
                 goto="generate_answer",
             )
         elif routing_result.next_step == "retrieval":
-            print("---ROUTE QUESTION TO RAG---")
+            print("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},
                 goto="retrieve",
@@ -174,6 +179,8 @@ class SHRAGPipeline:
         hallucination_grader = (
             hallucination_prompt | self.structured_llm_grade_hallucination
         )
+        if state["context"] is None:
+            raise ValueError("Context is None")
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
                 "documents": "\n\n".join(
@@ -293,6 +300,38 @@ class SHRAGPipeline:
                 goto="generate_answer",
             )
 
+    def user_review_rewritten_query(self, state: RAGState, config: RunnableConfig):
+        """
+        User review of rewritten query.
+        """
+        print("---USER REVIEW REWRITTEN QUERY---")
+        rewritten_query: str = state["input"]
+        if state["requires_more_information"]:
+            human_review = interrupt(
+                value={
+                    "question": "Um die Frage zu beantworten, benötige ich weitere Informationen. Können Sie mir bitte helfen?",
+                    "rewritten_query": rewritten_query,
+                }
+            )
+        else:
+            human_review = interrupt(
+                value={
+                    "question": "Ist die umgeformte Frage korrekt?",
+                    "rewritten_query": rewritten_query,
+                }
+            )
+        review_action = human_review["action"]
+        review_data = human_review.get("data")
+        if review_action == "accept":
+            return Command(goto="generate_answer")
+        elif review_action == "additional_information":
+            return Command(
+                update={"input": review_data},
+                goto="transform_query",
+            )
+        else:
+            raise ValueError(f"Unexpected review action: {review_action}")
+
     def transform_query(self, state: RAGState, config: RunnableConfig):
         """
         Transform the query to produce a better question.
@@ -311,7 +350,8 @@ class SHRAGPipeline:
             Write the re-phrased retrieval query in German as a question enclosed in <query> tags.
             The re-phrased question should be a question that can be answered by the vectorstore.
             The re-phrased question must be relevant to the initial user's question and keep the same meaning and intent.
-            
+            If you need more information, return "more_information".
+
             For example, if the input question is "Kindergeld", the re-phrased query should be 
             <query>Habe ich Anspruch auf Kindergeld?</query>.
             """
@@ -328,17 +368,25 @@ class SHRAGPipeline:
             re_write_prompt | self.query_rewriter_llm | StrOutputParser()
         )
         question = state["input"]
-        documents = state["context"]
         document_description = self.config.DOC_STORE.DOCUMENT_DESCRIPTION
 
         # Re-write question
         better_question = question_rewriter.invoke(
             {"question": question, "document_description": document_description}, config
         )
+        if better_question == "more_information":
+            return {"needs_rephrase": True, "requires_more_information": True}
         # Keep only content between <query> and </query> tags
-        better_question = re.search(r"<query>(.*?)</query>", better_question).group(1)
+        match = re.search(r"<query>(.*?)</query>", better_question)
+        if match is None:
+            raise ValueError("Could not find query in re-written question")
+        better_question = match.group(1)
 
-        return {"context": documents, "input": better_question}
+        return {
+            "input": better_question,
+            "needs_rephrase": False,
+            "requires_more_information": False,
+        }
 
     async def generate_answer(self, state: RAGState, config: RunnableConfig):
         if not state["messages"]:
@@ -371,6 +419,12 @@ class SHRAGPipeline:
         reranker = BentoMLReranker(
             api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key
         )
+        if vector_store.embeddings is None:
+            raise ValueError("Embeddings are None")
+        if vector_store._text_key is None:
+            raise ValueError("Vector store has no text key")
+        if vector_store._vector_key is None:
+            raise ValueError("Vector store has no vector key")
         retriever = LanceDBRetriever(
             table=vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),
             embeddings=vector_store.embeddings,
@@ -384,31 +438,23 @@ class SHRAGPipeline:
         )
         return retriever
 
-    def _setup_llm(self, temperature: float = None):
+    def _setup_llm(self, temperature: float | None = None):
         temperature = temperature or self.config.LLM.TEMPERATURE
         llm = ChatOpenAI(
-            model_name=self.config.LLM.MODEL,
+            model=self.config.LLM.MODEL,
             temperature=temperature,
-            openai_api_key="None",
-            openai_api_base=self.config.LLM.API_URL,
-            max_tokens=self.config.LLM.MAX_TOKENS,
+            api_key=SecretStr("None"),
+            base_url=self.config.LLM.API_URL,
+            max_completion_tokens=self.config.LLM.MAX_TOKENS,
         )
 
         return llm
 
-    def query(
-        self, question: str, user_organization: str, thread_id: str
-    ) -> tuple[str, list[tuple[str, Document]]]:
-        result = self.graph.invoke(
-            {"input": question, "user_organization": user_organization},
-            config={"configurable": {"thread_id": thread_id}},
-        )
-
-        return result["answer"], result["context"]
-
     async def astream_query(
         self, question: str, user_organization: str, thread_id: str
-    ) -> Iterator[tuple[str, Union[list[Document], str]]]:
+    ) -> AsyncIterator[
+        tuple[str, list[Document] | str] | str | tuple[str, tuple[str, str]]
+    ]:
         input = {"input": question, "user_organization": user_organization}
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
@@ -417,6 +463,7 @@ class SHRAGPipeline:
             "recursion_limit": recursion_limit,
             "configurable": {"thread_id": thread_id},
         }
+        config = RunnableConfig(**config)
 
         # Create a mapping from node update keys to handler functions.
         update_handlers = {
@@ -456,25 +503,39 @@ class SHRAGPipeline:
             kind, content = chunk
             if kind == "updates":
                 # Each update may include outputs from one or several nodes.
-                for key, update in content.items():
-                    if key in update_handlers:
-                        yield update_handlers[key](update)
-                    else:
-                        # Provide a fallback for new/unknown updates.
-                        yield (f"Update {key} erhalten", str(update))
+                if isinstance(content, dict):
+                    for key, update in content.items():
+                        if key in update_handlers:
+                            yield update_handlers[key](update)
+                        else:
+                            # Provide a fallback for new/unknown updates.
+                            yield (f"Update {key} erhalten", str(update))
             elif kind == "messages":
                 for message in content:
                     if isinstance(message, AIMessage):
-                        yield message.content
+                        if isinstance(message.content, str):
+                            yield message.content
+                        else:
+                            raise ValueError("Message content is not a string")
+            elif kind == "interrupt":
+                if isinstance(content, Interrupt):
+                    question_to_user = content.value["question"]
+                    rewritten_query = content.value["rewritten_query"]
+                    yield ("human_in_the_loop", (question_to_user, rewritten_query))
+                    raise StopAsyncIteration()
+                else:
+                    raise ValueError("Interrupt is not an Interrupt")
 
     def stream_query(
-        self, question: str, user_roles: list[str], thread_id: str
-    ) -> Iterator[Union[list[Document], str]]:
+        self, question: str, user_role: str, thread_id: str
+    ) -> Iterator[tuple[str, list[Document] | str] | str | tuple[str, tuple[str, str]]]:
         """Synchronous wrapper around astream_query"""
         print("Thread ID: ", thread_id)
 
         async def run_async():
-            async for chunk in self.astream_query(question, user_roles, thread_id):
+            async for chunk in self.astream_query(
+                question, user_organization=user_role, thread_id=thread_id
+            ):
                 yield chunk
 
         # Create and run event loop

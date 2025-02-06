@@ -30,6 +30,7 @@ class OutputState(TypedDict):
     answer_score: Literal["yes", "no"] | None
     needs_rephrase: bool | None
     route_query: RouteQuery | None
+    requires_more_information: bool | None
 
 
 class RAGState(InputState, OutputState):

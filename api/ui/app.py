@@ -30,7 +30,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
+    logger.critical(
+        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
+    )
 
 
 sys.excepthook = handle_exception
@@ -82,7 +84,7 @@ def setup_page():
         if "user_id" not in st.session_state:
             st.session_state["user_id"] = uuid.uuid4()
         if st.session_state[CONVERSATIONAL_PIPELINE] is None:
-            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline(st.session_state["roles"])
+            st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline()
     elif st.session_state["authentication_status"] is False:
         st.error("Benutzername oder Passwort sind falsch")
     elif st.session_state["authentication_status"] is None:

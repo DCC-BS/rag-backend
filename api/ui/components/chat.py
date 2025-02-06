@@ -33,14 +33,18 @@ def manage_chat():
     config = get_config()
     thread_id = st.session_state["user_id"]
 
-    prompt = st.session_state.get("user_input") or st.chat_input(config.CHAT.DEFAULT_PROMPT)
+    prompt = st.session_state.get("user_input") or st.chat_input(
+        config.CHAT.DEFAULT_PROMPT
+    )
     if prompt is not None:
         st.session_state.user_input = None
         st.session_state["chat_started"] = True
 
         with st.chat_message("user"):
             st.markdown(prompt)
-        st.session_state[UI_RENDERED_MESSAGES].append({"role": "user", "content": prompt})
+        st.session_state[UI_RENDERED_MESSAGES].append(
+            {"role": "user", "content": prompt}
+        )
 
         with st.chat_message("assistant"):
             with st.status("Suche relevante Dokumente...", expanded=True) as status:
@@ -50,7 +54,7 @@ def manage_chat():
                 def response_generator():
                     nonlocal full_response, flow_updates
                     for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
-                        prompt, thread_id
+                        prompt, "Sozialhilfe", thread_id
                     ):
                         if isinstance(chunk, tuple):
                             graph_state, graph_output = chunk
@@ -62,17 +66,31 @@ def manage_chat():
                             ):
                                 st.session_state[RELEVANT_DOCUMENTS] = graph_output
                                 yield f"{len(graph_output)} Dokumente gefunden \n\n"
-                            else:
+                            elif graph_state == "human_in_the_loop":
+                                question_to_user, rewritten_query = graph_output
+                                status.update(
+                                    label="Feedback benötigt", state="complete"
+                                )
+                                yield question_to_user
+                                st.session_state.ai_proposed_query = rewritten_query
+                                raise StopAsyncIteration()
+
+                            elif isinstance(graph_output, str):
                                 yield graph_output + "\n"
                         else:
                             full_response += str(chunk)
+
                             yield str(chunk)
                     status.update(label="Fertig!", state="complete")
 
-                st.write_stream(response_generator())
+                st.write_stream(stream=response_generator())
 
             st.session_state[UI_RENDERED_MESSAGES].append(
-                {"role": "assistant", "content": full_response, "flow_updates": flow_updates}
+                {
+                    "role": "assistant",
+                    "content": full_response,
+                    "flow_updates": flow_updates,
+                }
             )
             st.rerun()
 
@@ -101,6 +119,15 @@ def render_chat_history():
                 relevant_docs = st.session_state.get(RELEVANT_DOCUMENTS, [])
                 processed_text = process_citations(message["content"], relevant_docs)
                 st.markdown(processed_text, unsafe_allow_html=True)
+                if st.session_state.get("human_in_the_loop", False):
+                    st.markdown(
+                        f"**Frage konnte nicht umformuliert werden. Feedback benötigt:** {st.session_state.get('question_to_user')}; Vorschlag der AI: {st.session_state.get('ai_proposed_query')}"
+                    )
+                    st.session_state.pop("human_in_the_loop")
+                    feedback = st.text_area("Feedback")
+                    if st.button("Feedback absenden"):
+                        st.session_state.user_feedback = feedback
+                        st.rerun()
             else:
                 st.markdown(message["content"])
 
@@ -109,6 +136,13 @@ def render_chat_history():
                     st.write("Details der einzelnen Arbeitsschritte im Arbeitsablauf:")
                     for node_label, node_output in message["flow_updates"]:
                         if node_label.startswith("Update generate_answer"):
+                            continue
+                        if node_label == "human_in_the_loop":
+                            question_to_user, rewritten_query = node_output
+                            st.markdown(
+                                f"**Frage konnte nicht umformuliert werden. Feedback benötigt:** {question_to_user}; Vorschlag der AI: {rewritten_query}"
+                            )
+                            st.session_state.user_input = rewritten_query
                             continue
                         if isinstance(node_output, list):
                             st.markdown(f"**{node_label}:** Gefundene Dokumente:")
