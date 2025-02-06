@@ -12,15 +12,17 @@ from typing import (
     Literal,
 )
 
+import bcrypt
 import jwt
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.applications import FastAPI
 from fastapi.exceptions import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from langchain.schema import Document
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from starlette.responses import StreamingResponse
@@ -31,20 +33,37 @@ from core.rag_pipeline import SHRAGPipeline
 class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     username: str = Field(index=True)
-    hashed_password: str
-    role: str
+    hashed_password: bytes
+    organization: str
     disabled: bool = False
 
 
+state: dict[str, SHRAGPipeline] = {}
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     create_db_and_tables()
+    state["pipeline"] = SHRAGPipeline()
     yield
 
 
-app = FastAPI(title="RAG API", lifespan=lifespan)
+app: FastAPI = FastAPI(title="RAG API", lifespan=lifespan)
 
-pipeline = SHRAGPipeline()
+origins: list[str] = [
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:8000",
+    "http://localhost:50001",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 SECRET_KEY = "81e7ad176e1d9e40d3c467791f4b7b11b76700e9ad9f5e3d119f3537d11e4b46"
@@ -61,10 +80,6 @@ class TokenData(BaseModel):
     username: str | None = None
 
 
-class UserInDB(User):
-    hashed_password: str
-
-
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 
@@ -76,27 +91,24 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 def verify_password(
     plain_password,
     hashed_password,
-):
-    return pwd_context.verify(
-        plain_password,
-        hashed_password,
-    )
+) -> bool:
+    password_byte_enc = plain_password.encode("utf-8")
+    return bcrypt.checkpw(password=password_byte_enc, hashed_password=hashed_password)
 
 
 def get_password_hash(
-    password,
-):
-    return pwd_context.hash(password)
+    password: str,
+) -> bytes:
+    pwd_bytes: bytes = password.encode(encoding="utf-8")
+    salt: bytes = bcrypt.gensalt()
+    hashed_password: bytes = bcrypt.hashpw(password=pwd_bytes, salt=salt)
+    return hashed_password
 
 
 def get_session():
@@ -234,7 +246,7 @@ def query(
         (
             answer,
             context,
-        ) = pipeline.query(
+        ) = state["pipeline"].query(
             request.question,
             current_user.organization,
             "default",

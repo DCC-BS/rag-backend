@@ -10,3 +10,4 @@ __pycache__/
 feedback.csv
 api/.venv
 api/logs/
+api/database.db
