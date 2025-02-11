@@ -1,38 +1,22 @@
 from contextlib import asynccontextmanager
-from datetime import (
-    datetime,
-    timedelta,
-    timezone,
-)
-from typing import (
-    Annotated,
-    Any,
-    AsyncGenerator,
-    Literal,
-)
+from datetime import timedelta
+from typing import Annotated, Any, AsyncGenerator
 
-import bcrypt
-import jwt
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jwt.exceptions import InvalidTokenError
-from langchain.schema import Document
-from pydantic import BaseModel
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from fastapi.security import OAuth2PasswordRequestForm
 
+from auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    Token,
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+)
 from core.rag_pipeline import SHRAGPipeline
-
-
-class User(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    username: str = Field(index=True)
-    hashed_password: bytes
-    organization: str
-    disabled: bool = False
-
+from models import create_db_and_tables, get_session
 
 state: dict[str, SHRAGPipeline] = {}
 
@@ -62,182 +46,12 @@ app.add_middleware(
 )
 
 
-SECRET_KEY = "81e7ad176e1d9e40d3c467791f4b7b11b76700e9ad9f5e3d119f3537d11e4b46"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: str | None = None
-
-
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)
-
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-
-def verify_password(
-    plain_password,
-    hashed_password,
-) -> bool:
-    password_byte_enc = plain_password.encode("utf-8")
-    return bcrypt.checkpw(password=password_byte_enc, hashed_password=hashed_password)
-
-
-def get_password_hash(
-    password: str,
-) -> bytes:
-    pwd_bytes: bytes = password.encode(encoding="utf-8")
-    salt: bytes = bcrypt.gensalt()
-    hashed_password: bytes = bcrypt.hashpw(password=pwd_bytes, salt=salt)
-    return hashed_password
-
-
-def get_session():
-    with Session(engine) as session:
-        yield session
-
-
-SessionDep = Annotated[Session, Depends(get_session)]
-
-
-def get_user(
-    username: str,
-    session: SessionDep,
-) -> User | None:
-    user: User | None = session.exec(
-        select(User).where(User.username == username)
-    ).first()
-    if user:
-        return user
-    return None
-
-
-def authenticate_user(
-    username: str,
-    password: str,
-    session: SessionDep,
-) -> Any | Literal[False]:
-    user: Any = get_user(username=username, session=session)
-    if not user:
-        return False
-    if not verify_password(
-        plain_password=password,
-        hashed_password=user.hashed_password,
-    ):
-        return False
-
-    return user
-
-
-def create_access_token(
-    data: dict,
-    expires_delta: timedelta | None = None,
-) -> str:
-    to_encode: dict[Any, Any] = data.copy()
-    expire_time: datetime
-    if expires_delta:
-        expire_time = datetime.now(tz=timezone.utc) + expires_delta
-    else:
-        expire_time = datetime.now(tz=timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire_time})
-
-    encoded_jwt: str = jwt.encode(
-        payload=to_encode,
-        key=SECRET_KEY,
-        algorithm=ALGORITHM,
-    )
-    return encoded_jwt
-
-
-async def get_current_user(
-    token: Annotated[
-        str,
-        Depends(dependency=oauth2_scheme),
-    ],
-    session: SessionDep,
-) -> Any:
-    credentials_exception: HTTPException = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload: Any = jwt.decode(
-            jwt=token,
-            key=SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
-        username: str = payload.get("username")
-        if username is None:
-            raise credentials_exception
-        token_data: TokenData = TokenData(username=username)
-
-    except InvalidTokenError as err:
-        raise credentials_exception from err
-    if token_data.username is None:
-        raise credentials_exception
-    user: Any = get_user(username=token_data.username, session=session)
-    if user is None:
-        raise credentials_exception
-
-    return user
-
-
-class QueryRequest(BaseModel):
-    question: str
-
-
-class QueryResponse(BaseModel):
-    answer: str
-    context: list[
-        dict[
-            str,
-            Any,
-        ]
-    ]
-
-
-def document_to_dict(
-    doc: Document,
-) -> dict[
-    str,
-    Any,
-]:
-    return {
-        "page_content": doc.page_content,
-        "metadata": doc.metadata,
-    }
-
-
 @app.get("/stream_query")
 async def stream_query(
     question: str,
-    current_user: Annotated[
-        User,
-        Depends(get_current_user),
-    ],
+    current_user: Annotated[Any, Depends(get_current_user)],
     thread_id: str = "default",
 ) -> StreamingResponse:
-    """
-    GET endpoint to stream query events over text. This leverages the
-    asynchronous functionality provided by the pipeline.
-    """
-
     async def event_generator() -> AsyncGenerator[str, Any]:
         try:
             async for event in state["pipeline"].astream_query(
@@ -258,13 +72,10 @@ async def stream_query(
 
 @app.post("/token")
 async def login_for_access_token(
-    form_data: Annotated[
-        OAuth2PasswordRequestForm,
-        Depends(),
-    ],
-    session: SessionDep,
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    session: Annotated[Any, Depends(get_session)],
 ) -> Token:
-    user: Any = authenticate_user(
+    user = authenticate_user(
         username=form_data.username,
         password=form_data.password,
         session=session,
@@ -287,8 +98,4 @@ async def login_for_access_token(
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8080,
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8080)
