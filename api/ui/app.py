@@ -67,7 +67,7 @@ def main():
     render_chat_history()
     manage_chat()
     render_feedback_section()
-    render_debug_section()
+    # render_debug_section()
 
 
 def setup_page():

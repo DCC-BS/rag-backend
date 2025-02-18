@@ -17,8 +17,12 @@ from auth import (
 )
 from core.rag_pipeline import SHRAGPipeline
 from models import create_db_and_tables, get_session
+from utils.logging import setup_logger
 
 state: dict[str, SHRAGPipeline] = {}
+
+# Set up logger using the configured logging utility
+logger = setup_logger()
 
 
 @asynccontextmanager
@@ -61,8 +65,22 @@ async def stream_query(
             ):
                 yield f"{event}\n"
 
+        except StopAsyncIteration as e:
+            # Handle the intentional generator stop with return value
+            if hasattr(e, "value"):
+                yield f"{e.value}\n"
         except Exception as e:
-            yield f"Error: {str(e)}\n"
+            logger.error(
+                "Error processing stream query",
+                extra={
+                    "user": current_user.username,
+                    "thread_id": thread_id,
+                    "question": question,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+            yield "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.\n"
 
     return StreamingResponse(
         event_generator(),

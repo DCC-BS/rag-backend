@@ -29,10 +29,13 @@ from core.rag_states import (
 )
 from data.document_storage import get_lancedb_doc_store
 from utils.config import get_config
+from utils.logging import setup_logger
+from utils.stream_response import StreamResponse
 
 
 class SHRAGPipeline:
     def __init__(self) -> None:
+        self.logger = setup_logger()
         self.config: DictConfig | ListConfig = get_config()
         self.system_prompt: str = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
@@ -64,6 +67,34 @@ class SHRAGPipeline:
         )
         self.memory: MemorySaver = MemorySaver()
 
+        # Setup update handlers
+        self.update_handlers = {
+            "retrieve": lambda data: StreamResponse.create_document_response(
+                message="Relevante Dokumente gefunden", docs=data.get("context", [])
+            ),
+            "route_question": lambda data: StreamResponse.create_status(
+                message=f"{'Suche relevante Dokumente' if data.get('route_query') == 'retrieval' else 'Antworte auf die Frage'}",
+            ),
+            "filter_documents": lambda data: StreamResponse.create_status(
+                message=f"{len(data.get('context', []))} Dokumente sind relevant."
+            ),
+            "transform_query": lambda data: StreamResponse.create_status(
+                message=f"Frage umformuliert: {data.get('input')}"
+            ),
+            "query_needs_rephrase": lambda data: StreamResponse.create_status(
+                message="Die Frage muss umformuliert werden",
+                decision="Ja" if data.get("needs_rephrase") else "Nein",
+            ),
+            "grade_hallucination": lambda data: StreamResponse.create_status(
+                message="Antwort enthält Halluzinationen",
+                decision="Ja" if data.get("hallucination_score") else "Nein",
+            ),
+            "grade_answer": lambda data: StreamResponse.create_status(
+                message="Antwort ist relevant",
+                decision="Ja" if data.get("answer_score") else "Nein",
+            ),
+        }
+
         # Create graph
         workflow: StateGraph = StateGraph(
             state_schema=RAGState, input=InputState, output=OutputState
@@ -88,7 +119,6 @@ class SHRAGPipeline:
         workflow.add_edge(
             start_key="transform_query", end_key="user_review_rewritten_query"
         )
-        workflow.add_edge(start_key="user_review_rewritten_query", end_key="retrieve")
         workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
         workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
@@ -120,7 +150,7 @@ class SHRAGPipeline:
             str: Next node to call
         """
 
-        print("---ROUTE QUESTION---")
+        self.logger.info("---ROUTE QUESTION---")
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""
@@ -142,13 +172,13 @@ class SHRAGPipeline:
             {"question": state["input"]}, config
         )  # pyright: ignore[reportAssignmentType]
         if routing_result.next_step == "answer":
-            print("---ROUTE QUESTION TO ANSWER GENERATION---")
+            self.logger.info("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(
                 update={"route_query": "answer"},
                 goto="generate_answer",
             )
         elif routing_result.next_step == "retrieval":
-            print("---ROUTE QUESTION TO RETRIEVAL---")
+            self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},
                 goto="retrieve",
@@ -164,7 +194,7 @@ class SHRAGPipeline:
         """
         Grade hallucination on retrieved documents and answer.
         """
-        print("---GRADE HALLUCINATION---")
+        self.logger.info("---GRADE HALLUCINATION---")
         system = """You are a hallucination checker. You are given a list of retrieved documents and an answer.
         You are to grade the answer based on the retrieved documents.
         If the answer is not grounded in the retrieved documents, return 'yes'.
@@ -191,13 +221,13 @@ class SHRAGPipeline:
             config,
         )  # pyright: ignore[reportAssignmentType]
         if hallucination_result.binary_score == "yes":
-            print("---HALLUCINATION DETECTED---")
+            self.logger.info("---HALLUCINATION DETECTED---")
             return Command(
                 update={"hallucination_score": True},
                 goto="generate_answer",
             )
         else:
-            print("---HALLUCINATION NOT DETECTED---")
+            self.logger.info("---HALLUCINATION NOT DETECTED---")
             return Command(
                 update={"hallucination_score": False},
                 goto="grade_answer",
@@ -209,7 +239,7 @@ class SHRAGPipeline:
         """
         Grade answer generation.
         """
-        print("---GRADE ANSWER---")
+        self.logger.info("---GRADE ANSWER---")
         system = """You are a grader assessing relevance of an answer to a user question. \n 
             If the answer is relevant to the question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
@@ -225,14 +255,14 @@ class SHRAGPipeline:
             {"answer": state["answer"], "question": state["input"]}, config
         )  # pyright: ignore[reportAssignmentType]
         if answer_result.binary_score == "yes":
-            print("---ANSWER IS RELEVANT---")
+            self.logger.info("---ANSWER IS RELEVANT---")
 
             return Command(
                 update={"answer_score": True},
                 goto=END,
             )
         else:
-            print("---ANSWER IS NOT RELEVANT---")
+            self.logger.info("---ANSWER IS NOT RELEVANT---")
             return Command(
                 update={"answer_score": False},
                 goto="transform_query",
@@ -249,7 +279,7 @@ class SHRAGPipeline:
         Returns:
             dict: The filtered documents
         """
-        print("---FILTER DOCUMENTS---")
+        self.logger.info("---FILTER DOCUMENTS---")
         system = """You are a grader assessing relevance of a retrieved document to a user question. \n 
             If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous retrievals. \n
@@ -271,7 +301,7 @@ class SHRAGPipeline:
                 {"document": doc.page_content, "question": question}, config
             )  # pyright: ignore[reportAssignmentType]
             if grade_documents_result.binary_score == "no":
-                print(
+                self.logger.info(
                     f"Document {doc.metadata['filename']} is not relevant to the question."
                 )
             else:
@@ -284,53 +314,66 @@ class SHRAGPipeline:
         """
         Decide if the query needs to be re-written.
         """
-        print("---DECIDE IF QUERY NEEDS REWRITING---")
+        self.logger.info("---DECIDE IF QUERY NEEDS REWRITING---")
         filtered_documents: list[Document] = state["context"]  # pyright: ignore[reportOptionalIterable, reportAssignmentType]
         if len(filtered_documents) == 0:
-            print("---QUERY NEEDS REWRITING---")
+            self.logger.info("---QUERY NEEDS REWRITING---")
             return Command(
                 update={"needs_rephrase": True},
                 goto="transform_query",
             )
 
         else:
-            print("---QUERY DOES NOT NEED REWRITING---")
+            self.logger.info("---QUERY DOES NOT NEED REWRITING---")
             return Command(
                 update={"needs_rephrase": False},
                 goto="generate_answer",
             )
 
-    def user_review_rewritten_query(self, state: RAGState, config: RunnableConfig):
+    def user_review_rewritten_query(
+        self, state: RAGState, config: RunnableConfig
+    ) -> Command[Literal["retrieve", "transform_query"]]:
         """
-        User review of rewritten query.
+        User review of rewritten query. There are two cases:
+        1. The model needs more information to create a better query
+        2. The model has rewritten the query and needs user approval
         """
-        print("---USER REVIEW REWRITTEN QUERY---")
+        self.logger.info("---USER REVIEW REWRITTEN QUERY---")
         rewritten_query: str = state["input"]
+
         if state["requires_more_information"]:
             human_review = interrupt(
                 value={
-                    "question": "Um die Frage zu beantworten, benötige ich weitere Informationen. Können Sie mir bitte helfen?",
+                    "type": "needs_information",
+                    "question": "Um die Frage zu beantworten, benötige ich weitere Informationen. Bitte geben Sie eine detailliertere Frage ein.",
                     "rewritten_query": rewritten_query,
                 }
             )
+            if human_review["action"] == "provide_information":
+                return Command(
+                    update={"input": human_review["data"]},
+                    goto="transform_query",
+                )
+            else:
+                raise ValueError(f"Unexpected review action: {human_review['action']}")
         else:
+            # Case 2: Model has rewritten query and needs approval
             human_review = interrupt(
                 value={
+                    "type": "needs_approval",
                     "question": "Ist die umgeformte Frage korrekt?",
                     "rewritten_query": rewritten_query,
                 }
             )
-        review_action = human_review["action"]
-        review_data = human_review.get("data")
-        if review_action == "accept":
-            return Command(goto="generate_answer")
-        elif review_action == "additional_information":
-            return Command(
-                update={"input": review_data},
-                goto="transform_query",
-            )
-        else:
-            raise ValueError(f"Unexpected review action: {review_action}")
+            if human_review["action"] == "accept":
+                return Command(goto="retrieve")
+            elif human_review["action"] == "modify":
+                return Command(
+                    update={"input": human_review["data"]},
+                    goto="retrieve",
+                )
+            else:
+                raise ValueError(f"Unexpected review action: {human_review['action']}")
 
     def transform_query(self, state: RAGState, config: RunnableConfig):
         """
@@ -343,7 +386,7 @@ class SHRAGPipeline:
             state (dict): Updates question key with a re-phrased question
         """
 
-        print("---TRANSFORM QUERY---")
+        self.logger.info("---TRANSFORM QUERY---")
         system = """You are an expert question re-writer that converts an input question to a better version that is optimized 
             for vectorstore retrieval. Look at the input and try to reason about the underlying semantic intent / meaning.
             The vectorstore contains documents from this domain: {document_description}.
@@ -452,9 +495,7 @@ class SHRAGPipeline:
 
     async def astream_query(
         self, question: str, user_organization: str, thread_id: str
-    ) -> AsyncIterator[
-        tuple[str, list[Document] | str] | str | tuple[str, tuple[str, str]]
-    ]:
+    ) -> AsyncIterator[StreamResponse]:
         input = {"input": question, "user_organization": user_organization}
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
@@ -465,38 +506,6 @@ class SHRAGPipeline:
         }
         config = RunnableConfig(**config)
 
-        # Create a mapping from node update keys to handler functions.
-        update_handlers = {
-            "retrieve": lambda data: (
-                "Relevante Dokumente gefunden",
-                data.get("context"),
-            ),
-            "route_question": lambda data: (
-                "Frage weitergeleitet",
-                f"Frage an {data.get('route_query')} weitergeleitet.\n",
-            ),
-            "filter_documents": lambda data: (
-                "Dokumente gefiltert",
-                f"{len(data.get('context', []))} Dokumente sind relevant.\n",
-            ),
-            "transform_query": lambda data: (
-                "Frage umformuliert",
-                f"Frage umformuliert: {data.get('input')}\n",
-            ),
-            "query_needs_rephrase": lambda data: (
-                "Frage analysiert",
-                f"Die Frage muss umformuliert werden: {'Ja' if data.get('needs_rephrase') else 'Nein'}\n",
-            ),
-            "grade_hallucination": lambda data: (
-                "Halluzination überprüft",
-                f"Antwort enthält Halluzinationen: {'Ja' if data.get('hallucination_score') else 'Nein'}\n",
-            ),
-            "grade_answer": lambda data: (
-                "Antwort bewertet",
-                f"Antwort ist relevant: {'Ja' if data.get('answer_score') else 'Nein'}\n",
-            ),
-        }
-
         async for chunk in self.graph.astream(
             input=input, stream_mode=["updates", "messages"], config=config
         ):
@@ -505,38 +514,112 @@ class SHRAGPipeline:
                 # Each update may include outputs from one or several nodes.
                 if isinstance(content, dict):
                     for key, update in content.items():
-                        if key in update_handlers:
-                            yield update_handlers[key](update)
+                        if key in self.update_handlers:
+                            yield self.update_handlers[key](update)
                         else:
-                            # Provide a fallback for new/unknown updates.
-                            yield (f"Update {key} erhalten", str(update))
+                            self.logger.info(f"Unknown update: {key}")
             elif kind == "messages":
-                for message in content:
-                    if isinstance(message, AIMessage):
+                if isinstance(content, tuple):
+                    message = content[0]
+                    source = content[1]
+                    if (
+                        isinstance(message, AIMessage)
+                        and source["langgraph_node"] == "generate_answer"
+                    ):
                         if isinstance(message.content, str):
-                            yield message.content
+                            yield StreamResponse.create_answer_response(
+                                message="AI Antwort", answer_text=message.content
+                            )
                         else:
                             raise ValueError("Message content is not a string")
             elif kind == "interrupt":
                 if isinstance(content, Interrupt):
                     question_to_user = content.value["question"]
                     rewritten_query = content.value["rewritten_query"]
-                    yield ("human_in_the_loop", (question_to_user, rewritten_query))
+                    yield StreamResponse.create_interrupt_response(
+                        message="Benutzerinteraktion erforderlich",
+                        question=question_to_user,
+                        rewritten_query=rewritten_query,
+                    )
                     raise StopAsyncIteration()
                 else:
                     raise ValueError("Interrupt is not an Interrupt")
 
     def stream_query(
         self, question: str, user_role: str, thread_id: str
-    ) -> Iterator[tuple[str, list[Document] | str] | str | tuple[str, tuple[str, str]]]:
+    ) -> Iterator[StreamResponse]:
         """Synchronous wrapper around astream_query"""
-        print("Thread ID: ", thread_id)
+        self.logger.info(f"Thread ID: {thread_id}")
 
         async def run_async():
             async for chunk in self.astream_query(
                 question, user_organization=user_role, thread_id=thread_id
             ):
                 yield chunk
+
+        # Create and run event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            agen = run_async()
+            while True:
+                try:
+                    yield loop.run_until_complete(agen.__anext__())
+                except StopAsyncIteration:
+                    break
+        finally:
+            loop.close()
+
+    def resume_query(
+        self, thread_id: str, action: str, data: str | None = None
+    ) -> Iterator[StreamResponse]:
+        """Resume a RAG pipeline execution after an interrupt.
+
+        Args:
+            thread_id: The ID of the thread to resume
+            action: The action to take ('accept', 'modify', or 'provide_information')
+            data: Optional data to provide (modified query or additional information)
+        """
+        self.logger.info(f"Resuming Thread ID: {thread_id}")
+
+        async def run_async():
+            config = RunnableConfig(configurable={"thread_id": thread_id})
+            async for chunk in self.graph.astream(
+                Command(resume={"action": action, "data": data}), config=config
+            ):
+                kind, content = chunk
+                if kind == "updates":
+                    # Each update may include outputs from one or several nodes.
+                    if isinstance(content, dict):
+                        for key, update in content.items():
+                            if key in self.update_handlers:
+                                yield self.update_handlers[key](update)
+                            else:
+                                # Provide a fallback for new/unknown updates.
+                                yield StreamResponse.create_status(
+                                    message=f"Update {key} erhalten: {str(update)}"
+                                )
+                elif kind == "messages":
+                    for message in content:
+                        if isinstance(message, AIMessage):
+                            if isinstance(message.content, str):
+                                yield StreamResponse.create_answer_response(
+                                    message="AI Antwort", answer_text=message.content
+                                )
+                            else:
+                                raise ValueError("Message content is not a string")
+                elif kind == "interrupt":
+                    if isinstance(content, Interrupt):
+                        question_to_user = content.value["question"]
+                        rewritten_query = content.value["rewritten_query"]
+                        yield StreamResponse.create_interrupt_response(
+                            message="Benutzerinteraktion erforderlich",
+                            question=question_to_user,
+                            rewritten_query=rewritten_query,
+                        )
+                        raise StopAsyncIteration()
+                    else:
+                        raise ValueError("Interrupt is not an Interrupt")
 
         # Create and run event loop
         loop = asyncio.new_event_loop()
