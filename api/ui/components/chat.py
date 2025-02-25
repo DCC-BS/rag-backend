@@ -26,6 +26,75 @@ def process_citations(text, relevant_docs):
     return re.sub(r"\[([^\]]+)\]", replacement, text)
 
 
+def process_stream(
+    prompt: str | None,
+    thread_id: str,
+    status,
+    is_resume: bool = False,
+    resume_action: str | None = None,
+    resume_data: str | None = None,
+):
+    """Process the stream of responses from the RAG pipeline"""
+    full_response = ""
+    flow_updates = []
+    placeholder = st.empty()
+
+    # Choose which pipeline method to call based on whether we're resuming
+    if is_resume:
+        stream = st.session_state[CONVERSATIONAL_PIPELINE].resume_query(
+            thread_id=thread_id, action=resume_action, data=resume_data
+        )
+    else:
+        stream = st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
+            prompt, "Sozialhilfe", thread_id
+        )
+
+    for chunk in stream:
+        if chunk.type == StreamResponseType.STATUS:
+            flow_updates.append(
+                (chunk.message, chunk.decision if hasattr(chunk, "decision") else "")
+            )
+            status.update(label=chunk.message, state="running")
+        elif chunk.type == StreamResponseType.DOCUMENTS:
+            flow_updates.append((chunk.message, chunk.documents))
+            status.update(label=chunk.message, state="running")
+            st.session_state[RELEVANT_DOCUMENTS] = chunk.documents
+        elif chunk.type == StreamResponseType.ANSWER:
+            full_response += chunk.answer
+            placeholder.markdown(full_response)
+        elif chunk.type == StreamResponseType.INTERRUPT:
+            flow_updates.append(
+                (
+                    "human_in_the_loop",
+                    (chunk.metadata["question"], chunk.metadata["rewritten_query"]),
+                )
+            )
+            status.update(label="Feedback benötigt", state="complete")
+            st.info(chunk.metadata["question"])
+            st.session_state["interrupt_state"] = {
+                "type": chunk.metadata["type"],
+                "question": chunk.metadata["question"],
+                "rewritten_query": chunk.metadata["rewritten_query"],
+            }
+            st.rerun()
+            break
+
+    status.update(
+        label="Fertig!"
+        if "interrupt_state" not in st.session_state
+        else "Warte auf Feedback",
+        state="complete",
+    )
+
+    st.session_state[UI_RENDERED_MESSAGES].append(
+        {
+            "role": "assistant",
+            "content": full_response.replace("ß", "ss"),
+            "flow_updates": flow_updates,
+        }
+    )
+
+
 def manage_chat():
     """
     Handle user interaction with the conversational AI and render
@@ -38,18 +107,22 @@ def manage_chat():
     if "interrupt_state" in st.session_state:
         interrupt_type = st.session_state["interrupt_state"]["type"]
         if interrupt_type == "needs_information":
-            st.info("Bitte geben Sie weitere Informationen ein:")
+            st.info(
+                "Die Frage ist nicht eindeutig. Bitte geben Sie weitere Informationen ein:"
+            )
             additional_info = st.text_area("Zusätzliche Informationen")
             if st.button("Informationen senden"):
                 with st.chat_message("assistant"):
                     with st.status(
                         "Verarbeite zusätzliche Informationen...", expanded=True
                     ) as status:
-                        process_resume_stream(
+                        process_stream(
+                            prompt=None,
                             thread_id=thread_id,
                             status=status,
-                            action="provide_information",
-                            data=additional_info,
+                            is_resume=True,
+                            resume_action="provide_information",
+                            resume_data=additional_info,
                         )
                 del st.session_state["interrupt_state"]
                 st.rerun()
@@ -57,24 +130,29 @@ def manage_chat():
             st.info("Bitte überprüfen Sie die umformulierte Frage:")
             rewritten_query = st.session_state["interrupt_state"]["rewritten_query"]
             st.text(rewritten_query)
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Akzeptieren"):
-                    with st.chat_message("assistant"):
-                        with st.status(
-                            "Verarbeite Anfrage...", expanded=True
-                        ) as status:
-                            process_resume_stream(
-                                thread_id=thread_id,
-                                status=status,
-                                action="accept",
-                            )
-                    del st.session_state["interrupt_state"]
-                    st.rerun()
-            with col2:
-                if st.button("Ändern"):
-                    st.session_state["modifying_query"] = True
-                    st.session_state["original_query"] = rewritten_query
+
+            # Create columns for buttons outside the chat message
+            button_cols = st.columns(2)
+            accept_clicked = button_cols[0].button("Akzeptieren")
+            modify_clicked = button_cols[1].button("Ändern")
+
+            if accept_clicked:
+                with st.chat_message("assistant"):
+                    with st.status("Verarbeite Anfrage...", expanded=True) as status:
+                        process_stream(
+                            prompt=None,
+                            thread_id=thread_id,
+                            status=status,
+                            is_resume=True,
+                            resume_action="accept",
+                        )
+                del st.session_state["interrupt_state"]
+                st.rerun()
+
+            if modify_clicked:
+                st.session_state["modifying_query"] = True
+                st.session_state["original_query"] = rewritten_query
+                st.rerun()
 
         if st.session_state.get("modifying_query"):
             modified_query = st.text_area(
@@ -85,11 +163,13 @@ def manage_chat():
                     with st.status(
                         "Verarbeite geänderte Frage...", expanded=True
                     ) as status:
-                        process_resume_stream(
+                        process_stream(
+                            prompt=modified_query,
                             thread_id=thread_id,
                             status=status,
-                            action="modify",
-                            data=modified_query,
+                            is_resume=True,
+                            resume_action="modify",
+                            resume_data=modified_query,
                         )
                 del st.session_state["interrupt_state"]
                 del st.session_state["modifying_query"]
@@ -113,110 +193,6 @@ def manage_chat():
         with st.chat_message("assistant"):
             with st.status("Suche relevante Dokumente...", expanded=True) as status:
                 process_stream(prompt, thread_id, status)
-
-
-def process_stream(prompt: str, thread_id: str, status):
-    """Process the stream of responses from the RAG pipeline"""
-    full_response = ""
-    flow_updates = []
-
-    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].stream_query(
-        prompt, "Sozialhilfe", thread_id
-    ):
-        if chunk.type == StreamResponseType.STATUS:
-            flow_updates.append((chunk.message, chunk.decision))
-            status.update(label=chunk.message, state="running")
-        elif chunk.type == StreamResponseType.DOCUMENTS:
-            flow_updates.append((chunk.message, chunk.documents))
-            status.update(label=chunk.message, state="running")
-            st.session_state[RELEVANT_DOCUMENTS] = chunk.documents
-        elif chunk.type == StreamResponseType.ANSWER:
-            full_response += chunk.answer
-            if "placeholder" not in st.session_state:
-                st.session_state.placeholder = st.empty()
-            st.session_state.placeholder.markdown(full_response)
-        elif chunk.type == StreamResponseType.INTERRUPT:
-            flow_updates.append(
-                (
-                    "human_in_the_loop",
-                    (chunk.metadata["question"], chunk.metadata["rewritten_query"]),
-                )
-            )
-            status.update(label="Feedback benötigt", state="complete")
-            st.info(chunk.metadata["question"])
-            st.session_state["interrupt_state"] = {
-                "type": chunk.metadata["type"],
-                "question": chunk.metadata["question"],
-                "rewritten_query": chunk.metadata["rewritten_query"],
-            }
-            break
-
-    status.update(
-        label="Fertig!"
-        if "interrupt_state" not in st.session_state
-        else "Warte auf Feedback",
-        state="complete",
-    )
-
-    st.session_state[UI_RENDERED_MESSAGES].append(
-        {
-            "role": "assistant",
-            "content": full_response,
-            "flow_updates": flow_updates,
-        }
-    )
-
-
-def process_resume_stream(thread_id: str, status, action: str, data: str | None = None):
-    """Process the stream of responses after resuming from an interrupt"""
-    full_response = ""
-    flow_updates = []
-
-    for chunk in st.session_state[CONVERSATIONAL_PIPELINE].resume_query(
-        thread_id=thread_id, action=action, data=data
-    ):
-        if chunk.type == StreamResponseType.STATUS:
-            flow_updates.append((chunk.message, ""))
-            status.update(label=chunk.message, state="running")
-        elif chunk.type == StreamResponseType.DOCUMENTS:
-            flow_updates.append((chunk.message, chunk.documents))
-            status.update(label=chunk.message, state="running")
-            st.session_state[RELEVANT_DOCUMENTS] = chunk.documents
-        elif chunk.type == StreamResponseType.ANSWER:
-            full_response += chunk.answer
-            if "placeholder" not in st.session_state:
-                st.session_state.placeholder = st.empty()
-            st.session_state.placeholder.markdown(full_response)
-        elif chunk.type == StreamResponseType.INTERRUPT:
-            flow_updates.append(
-                (
-                    "human_in_the_loop",
-                    (chunk.metadata["question"], chunk.metadata["rewritten_query"]),
-                )
-            )
-            status.update(label="Feedback benötigt", state="complete")
-            st.info(chunk.metadata["question"])
-            st.session_state["interrupt_state"] = {
-                "type": chunk.metadata["type"],
-                "question": chunk.metadata["question"],
-                "rewritten_query": chunk.metadata["rewritten_query"],
-            }
-            break
-
-    status.update(
-        label="Fertig!"
-        if "interrupt_state" not in st.session_state
-        else "Warte auf Feedback",
-        state="complete",
-    )
-
-    st.session_state[UI_RENDERED_MESSAGES].append(
-        {
-            "role": "assistant",
-            "content": full_response.replace("ß", "ss"),
-            "flow_updates": flow_updates,
-        }
-    )
 
 
 def render_example_queries():

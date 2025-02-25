@@ -366,7 +366,7 @@ class SHRAGPipeline:
                 }
             )
             if human_review["action"] == "accept":
-                return Command(goto="retrieve")
+                return Command(goto="retrieve", update={"input": rewritten_query})
             elif human_review["action"] == "modify":
                 return Command(
                     update={"input": human_review["data"]},
@@ -494,17 +494,31 @@ class SHRAGPipeline:
         return llm
 
     async def astream_query(
-        self, question: str, user_organization: str, thread_id: str
+        self,
+        question: str | None = None,
+        user_organization: str | None = None,
+        thread_id: str | None = None,
+        resume_action: str | None = None,
+        resume_data: str | None = None,
     ) -> AsyncIterator[StreamResponse]:
-        input = {"input": question, "user_organization": user_organization}
+        latest_message_run_id = None
+        if resume_action is not None:
+            # Resume execution case
+            input = Command(resume={"action": resume_action, "data": resume_data})
+            if thread_id is None:
+                raise ValueError("thread_id is required when resuming execution")
+        else:
+            # New query case
+            if question is None or user_organization is None or thread_id is None:
+                raise ValueError(
+                    "question, user_organization, and thread_id are required for new queries"
+                )
+            input = {"input": question, "user_organization": user_organization}
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
-
-        config = {
-            "recursion_limit": recursion_limit,
-            "configurable": {"thread_id": thread_id},
-        }
-        config = RunnableConfig(**config)
+        config = RunnableConfig(
+            recursion_limit=recursion_limit, configurable={"thread_id": thread_id}
+        )
 
         async for chunk in self.graph.astream(
             input=input, stream_mode=["updates", "messages"], config=config
@@ -516,6 +530,21 @@ class SHRAGPipeline:
                     for key, update in content.items():
                         if key in self.update_handlers:
                             yield self.update_handlers[key](update)
+                        elif key == "__interrupt__":
+                            self.logger.info(f"Interrupt: {content}")
+                            interrupt = update[0]
+                            if isinstance(interrupt, Interrupt):
+                                question_to_user = interrupt.value["question"]
+                                rewritten_query = interrupt.value["rewritten_query"]
+                                interrupt_type = interrupt.value["type"]
+                                yield StreamResponse.create_interrupt_response(
+                                    message="Benutzerinteraktion erforderlich",
+                                    question=question_to_user,
+                                    rewritten_query=rewritten_query,
+                                    type=interrupt_type,
+                                )
+                            else:
+                                raise ValueError("Interrupt is not an Interrupt")
                         else:
                             self.logger.info(f"Unknown update: {key}")
             elif kind == "messages":
@@ -526,24 +555,17 @@ class SHRAGPipeline:
                         isinstance(message, AIMessage)
                         and source["langgraph_node"] == "generate_answer"
                     ):
-                        if isinstance(message.content, str):
-                            yield StreamResponse.create_answer_response(
-                                message="AI Antwort", answer_text=message.content
-                            )
-                        else:
-                            raise ValueError("Message content is not a string")
-            elif kind == "interrupt":
-                if isinstance(content, Interrupt):
-                    question_to_user = content.value["question"]
-                    rewritten_query = content.value["rewritten_query"]
-                    yield StreamResponse.create_interrupt_response(
-                        message="Benutzerinteraktion erforderlich",
-                        question=question_to_user,
-                        rewritten_query=rewritten_query,
-                    )
-                    raise StopAsyncIteration()
-                else:
-                    raise ValueError("Interrupt is not an Interrupt")
+                        if (
+                            latest_message_run_id is None
+                            or message.id != latest_message_run_id
+                        ):
+                            if isinstance(message.content, str):
+                                latest_message_run_id = message.id
+                                yield StreamResponse.create_answer_response(
+                                    message="AI Antwort", answer_text=message.content
+                                )
+                            else:
+                                raise ValueError("Message content is not a string")
 
     def stream_query(
         self, question: str, user_role: str, thread_id: str
@@ -553,7 +575,7 @@ class SHRAGPipeline:
 
         async def run_async():
             async for chunk in self.astream_query(
-                question, user_organization=user_role, thread_id=thread_id
+                question=question, user_organization=user_role, thread_id=thread_id
             ):
                 yield chunk
 
@@ -583,43 +605,10 @@ class SHRAGPipeline:
         self.logger.info(f"Resuming Thread ID: {thread_id}")
 
         async def run_async():
-            config = RunnableConfig(configurable={"thread_id": thread_id})
-            async for chunk in self.graph.astream(
-                Command(resume={"action": action, "data": data}), config=config
+            async for chunk in self.astream_query(
+                thread_id=thread_id, resume_action=action, resume_data=data
             ):
-                kind, content = chunk
-                if kind == "updates":
-                    # Each update may include outputs from one or several nodes.
-                    if isinstance(content, dict):
-                        for key, update in content.items():
-                            if key in self.update_handlers:
-                                yield self.update_handlers[key](update)
-                            else:
-                                # Provide a fallback for new/unknown updates.
-                                yield StreamResponse.create_status(
-                                    message=f"Update {key} erhalten: {str(update)}"
-                                )
-                elif kind == "messages":
-                    for message in content:
-                        if isinstance(message, AIMessage):
-                            if isinstance(message.content, str):
-                                yield StreamResponse.create_answer_response(
-                                    message="AI Antwort", answer_text=message.content
-                                )
-                            else:
-                                raise ValueError("Message content is not a string")
-                elif kind == "interrupt":
-                    if isinstance(content, Interrupt):
-                        question_to_user = content.value["question"]
-                        rewritten_query = content.value["rewritten_query"]
-                        yield StreamResponse.create_interrupt_response(
-                            message="Benutzerinteraktion erforderlich",
-                            question=question_to_user,
-                            rewritten_query=rewritten_query,
-                        )
-                        raise StopAsyncIteration()
-                    else:
-                        raise ValueError("Interrupt is not an Interrupt")
+                yield chunk
 
         # Create and run event loop
         loop = asyncio.new_event_loop()

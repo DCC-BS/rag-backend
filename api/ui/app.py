@@ -57,6 +57,8 @@ def initialize_session_state():
         st.session_state[RELEVANT_DOCUMENTS] = []
     if CONVERSATIONAL_PIPELINE not in st.session_state:
         st.session_state[CONVERSATIONAL_PIPELINE] = None
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = uuid.uuid4()
 
 
 def main():
@@ -64,9 +66,12 @@ def main():
     authentication()
     initialize_session_state()
     setup_page()
-    render_chat_history()
-    manage_chat()
-    render_feedback_section()
+
+    # Only render chat components if user is authenticated
+    if st.session_state.get("authentication_status"):
+        render_chat_history()
+        manage_chat()
+        render_feedback_section()
     # render_debug_section()
 
 
@@ -81,8 +86,6 @@ def setup_page():
         st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
         st.write(f'Hallo *{st.session_state["name"]}*')
         render_example_queries()
-        if "user_id" not in st.session_state:
-            st.session_state["user_id"] = uuid.uuid4()
         if st.session_state[CONVERSATIONAL_PIPELINE] is None:
             st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline()
     elif st.session_state["authentication_status"] is False:
