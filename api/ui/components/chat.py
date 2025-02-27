@@ -1,4 +1,5 @@
 import streamlit as st
+from langchain_core.runnables.config import P
 
 from ui.constants import (
     CONVERSATIONAL_PIPELINE,
@@ -77,21 +78,22 @@ def process_stream(
                 "rewritten_query": chunk.metadata["rewritten_query"],
             }
             st.rerun()
-            break
+
+    # Only add the assistant message if we have a response and no interruption
+    if full_response and "interrupt_state" not in st.session_state:
+        st.session_state[UI_RENDERED_MESSAGES].append(
+            {
+                "role": "assistant",
+                "content": full_response.replace("ß", "ss"),
+                "flow_updates": flow_updates,
+            }
+        )
 
     status.update(
         label="Fertig!"
         if "interrupt_state" not in st.session_state
         else "Warte auf Feedback",
         state="complete",
-    )
-
-    st.session_state[UI_RENDERED_MESSAGES].append(
-        {
-            "role": "assistant",
-            "content": full_response.replace("ß", "ss"),
-            "flow_updates": flow_updates,
-        }
     )
 
 

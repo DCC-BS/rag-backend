@@ -93,6 +93,9 @@ class SHRAGPipeline:
                 message="Antwort ist relevant",
                 decision="Ja" if data.get("answer_score") else "Nein",
             ),
+            "generate_answer": lambda data: StreamResponse.create_answer_response(
+                message="AI Antwort", answer_text=data.get("answer", "")
+            ),
         }
 
         # Create graph
@@ -501,7 +504,6 @@ class SHRAGPipeline:
         resume_action: str | None = None,
         resume_data: str | None = None,
     ) -> AsyncIterator[StreamResponse]:
-        latest_message_run_id = None
         if resume_action is not None:
             # Resume execution case
             input = Command(resume={"action": resume_action, "data": resume_data})
@@ -521,7 +523,7 @@ class SHRAGPipeline:
         )
 
         async for chunk in self.graph.astream(
-            input=input, stream_mode=["updates", "messages"], config=config
+            input=input, stream_mode=["updates"], config=config
         ):
             kind, content = chunk
             if kind == "updates":
@@ -547,25 +549,6 @@ class SHRAGPipeline:
                                 raise ValueError("Interrupt is not an Interrupt")
                         else:
                             self.logger.info(f"Unknown update: {key}")
-            elif kind == "messages":
-                if isinstance(content, tuple):
-                    message = content[0]
-                    source = content[1]
-                    if (
-                        isinstance(message, AIMessage)
-                        and source["langgraph_node"] == "generate_answer"
-                    ):
-                        if (
-                            latest_message_run_id is None
-                            or message.id != latest_message_run_id
-                        ):
-                            if isinstance(message.content, str):
-                                latest_message_run_id = message.id
-                                yield StreamResponse.create_answer_response(
-                                    message="AI Antwort", answer_text=message.content
-                                )
-                            else:
-                                raise ValueError("Message content is not a string")
 
     def stream_query(
         self, question: str, user_role: str, thread_id: str
