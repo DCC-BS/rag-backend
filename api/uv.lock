@@ -3036,6 +3036,7 @@ dependencies = [
     { name = "sqlmodel" },
     { name = "streamlit" },
     { name = "streamlit-authenticator" },
+    { name = "structlog" },
     { name = "tantivy" },
     { name = "transformers" },
     { name = "wheel" },
@@ -3070,6 +3071,7 @@ requires-dist = [
     { name = "sqlmodel", specifier = ">=0.0.22" },
     { name = "streamlit", specifier = ">=1.41.1" },
     { name = "streamlit-authenticator", specifier = ">=0.4.1" },
+    { name = "structlog", specifier = ">=25.1.0" },
     { name = "tantivy", specifier = ">=0.22.0" },
     { name = "transformers", specifier = ">=4.47.0" },
     { name = "wheel", specifier = ">=0.45.1" },
@@ -3251,6 +3253,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f8/70/04c24fb2d9b372edfa2261cbec3828633bc997c4bf29310ff53cf092a647/streamlit_authenticator-0.4.1.tar.gz", hash = "sha256:d4afeec5c972d794052a5552aa570e7eb620f0cc183484a5b052304907268381", size = 31401 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/28/c19eae3f2b29dd4658e16d3fd3e0164af13c501493e0bc260effcfe04407/streamlit_authenticator-0.4.1-py3-none-any.whl", hash = "sha256:776136e6a6ecde1ecc9dda054a7492290199b81e19268abff307a7d508685942", size = 34747 },
+]
+
+[[package]]
+name = "structlog"
+version = "25.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/fe/578db23e17392a8693b45a7b7dc6985370f51dd937157def8ecc7b20930d/structlog-25.1.0.tar.gz", hash = "sha256:2ef2a572e0e27f09664965d31a576afe64e46ac6084ef5cec3c2b8cd6e4e3ad3", size = 1364973 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/14/e9aed6c820fa166e8a19a19e663e98bd5538004d68a70c5752458ca3656e/structlog-25.1.0-py3-none-any.whl", hash = "sha256:843fe4f254540329f380812cbe612e1af5ec5b8172205ae634679cd35a6d6321", size = 68921 },
 ]
 
 [[package]]

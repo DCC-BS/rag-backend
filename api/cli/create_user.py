@@ -1,9 +1,10 @@
 import argparse
 from argparse import Namespace
 
+from sqlmodel import Session, select
+
 from auth import get_password_hash
 from models import User, create_db_and_tables, engine
-from sqlmodel import Session, select
 
 
 def create_user(

@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Iterator
 
+import structlog
 from docling.chunking import HybridChunker
 from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.pipeline_options import (
@@ -16,13 +17,12 @@ from langchain_core.documents import Document as LCDocument
 from transformers import AutoTokenizer
 
 from utils.config import get_config
-from utils.logging import setup_logger
 
 
 class DoclingLoader(BaseLoader):
     def __init__(self, file_path: str | list[str], organization: str) -> None:
         config = get_config()
-        self.logger = setup_logger()
+        self.logger = structlog.stdlib.get_logger()
 
         self._file_paths = file_path if isinstance(file_path, list) else [file_path]
         self._organization = organization

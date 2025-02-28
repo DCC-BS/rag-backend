@@ -3,8 +3,8 @@ import uuid
 
 import streamlit as st
 import streamlit_authenticator as stauth
+import structlog
 from components.chat import manage_chat, render_chat_history, render_example_queries
-from components.debug import render_debug_section
 from components.feedback import render_feedback_section
 from dotenv import load_dotenv
 from rich.traceback import install
@@ -17,11 +17,10 @@ from ui.constants import (
     UI_RENDERED_MESSAGES,
 )
 from utils.config import get_config, load_config
-from utils.logging import setup_logger
 
 load_dotenv()
 install(show_locals=True)
-logger = setup_logger()
+logger = structlog.stdlib.get_logger()
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):

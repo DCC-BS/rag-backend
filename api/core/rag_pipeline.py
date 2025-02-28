@@ -3,9 +3,10 @@ import re
 from collections.abc import Iterator
 from typing import AsyncIterator, Literal
 
+import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -29,13 +30,12 @@ from core.rag_states import (
 )
 from data.document_storage import get_lancedb_doc_store
 from utils.config import get_config
-from utils.logging import setup_logger
 from utils.stream_response import StreamResponse
 
 
 class SHRAGPipeline:
     def __init__(self) -> None:
-        self.logger = setup_logger()
+        self.logger = structlog.stdlib.get_logger()
         self.config: DictConfig | ListConfig = get_config()
         self.system_prompt: str = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
