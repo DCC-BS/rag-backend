@@ -83,7 +83,7 @@ class DoclingLoader(BaseLoader):
             if path_source.is_symlink() or path_source.name.startswith("~"):
                 self.logger.warning(f"Skipping symlink {source}")
                 continue
-            result = self._converter.convert(source, raises_on_error=True)
+            result = self._converter.convert(source, raises_on_error=False)
             if not result.status == ConversionStatus.SUCCESS:
                 self.logger.error(
                     f"Failed to convert document {source}. Document skipped."

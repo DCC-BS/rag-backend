@@ -10,6 +10,10 @@ config = load_config()
 
 
 def create_lancedb_document_store():
+    import os
+
+    os.chdir("..")
+    print(os.getcwd())
     sources = config.DOC_SOURCES
 
     documents = []
