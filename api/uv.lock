@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.12.4' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
@@ -901,14 +902,13 @@ wheels = [
 
 [[package]]
 name = "flash-attn"
-version = "2.7.2.post1"
+version = "2.7.4.post1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "einops" },
-    { name = "setuptools" },
     { name = "torch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/83/29/48df18cb51902a7cb7a0ee13327bb2cf50b6ba24bd2e8283d0a9538dde52/flash_attn-2.7.2.post1.tar.gz", hash = "sha256:574897afeb6cbd63e78a612dded95491efe4a46818245cf1a5ace7357d993faa", size = 3136637 }
+sdist = { url = "https://files.pythonhosted.org/packages/11/34/9bf60e736ed7bbe15055ac2dab48ec67d9dbd088d2b4ae318fd77190ab4e/flash_attn-2.7.4.post1.tar.gz", hash = "sha256:f03485c9a49a4d68d0733acdcad80ab0e72afa025a777fdc2966ceccf9d51765", size = 5986610 }
 
 [[package]]
 name = "frozenlist"
@@ -3147,7 +3147,7 @@ requires-dist = [
     { name = "docling", specifier = ">=2.15.0" },
     { name = "einops", specifier = ">=0.8.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.8" },
-    { name = "flash-attn", marker = "extra == 'compile'", specifier = "==2.7.2.post1" },
+    { name = "flash-attn", marker = "extra == 'compile'", specifier = "==2.7.4.post1" },
     { name = "lancedb", specifier = ">=0.17.0" },
     { name = "langchain", specifier = ">=0.3.14" },
     { name = "langchain-community", specifier = ">=0.3.14" },
@@ -3168,6 +3168,7 @@ requires-dist = [
     { name = "transformers", specifier = ">=4.47.0" },
     { name = "wheel", specifier = ">=0.45.1" },
 ]
+provides-extras = ["compile"]
 
 [[package]]
 name = "shapely"
