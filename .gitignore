@@ -2,12 +2,12 @@ data
 !api/data
 __pychache__
 lancedb
-rag_pipeline.png
-conf/local/*
+api/conf/local/*
 __pycache__/
 *.log
 .ruff_cache
-feedback.csv
+api/feedback.csv
 api/.venv
 api/logs/
 api/database.db
+
