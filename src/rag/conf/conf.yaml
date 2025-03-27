@@ -24,4 +24,3 @@ LLM:
 DOCLING:
   NUM_THREADS: 16
   USE_GPU: True
-

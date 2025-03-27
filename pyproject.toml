@@ -1,5 +1,5 @@
 [project]
-name = "sh-rag-chat"
+name = "rag"
 dynamic = ["version"]
 description = "RAG Bot für den Kanton Basel Stadt"
 readme = "README.md"
@@ -107,7 +107,7 @@ exclude = [
 ]
 defineConstant = { DEBUG = true }
 pythonVersion = "3.12"
-stubPath = "src/example_project/stubs"
+stubPath = "src/rag/stubs"
 reportExplicitAny = false
 
 [tool.pytest.ini_options]
@@ -156,6 +156,7 @@ ignore = [
     "E501",
     # DoNotAssignLambda
     "E731",
+    "TRY003"
 ]
 
 [tool.ruff.lint.per-file-ignores]

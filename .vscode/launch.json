@@ -1,55 +1,52 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python Debugger: FastAPI",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "uvicorn",
-            "cwd": "${workspaceFolder}/api",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
-            },
-            "args": [
-                "main:app",
-                "--reload",
-                "--port",
-                "8080"
-            ],
-            "jinja": true
-        },
-        {
-            "name": "Python Debugger: Streamlit",
-            "type": "debugpy",
-            "request": "launch",
-            "justMyCode": false,
-            "module": "streamlit",
-            "cwd": "${workspaceFolder}/api",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
-            },
-            "args": [
-                "run",
-                "ui/app.py"
-            ],
-        },
-        {
-            "name": "Streamlit",
-            "type": "python",
-            "request": "launch",
-            "module": "streamlit",
-            "cwd": "${workspaceFolder}/api",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
-            },
-            "args": [
-                "run",
-                "ui/app.py"
-            ],
-            "justMyCode": false
-        }
-    ]
+  "configurations": [
+    {
+      "args": [
+        "main:app",
+        "--reload",
+        "--port",
+        "8080"
+      ],
+      "cwd": "${workspaceFolder}/api",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+      },
+      "jinja": true,
+      "module": "uvicorn",
+      "name": "Python Debugger: FastAPI",
+      "request": "launch",
+      "type": "debugpy"
+    },
+    {
+      "args": [
+        "run",
+        "ui/app.py"
+      ],
+      "cwd": "${workspaceFolder}/api",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+      },
+      "justMyCode": false,
+      "module": "streamlit",
+      "name": "Python Debugger: Streamlit",
+      "request": "launch",
+      "type": "debugpy"
+    },
+    {
+      "args": [
+        "run",
+        "ui/app.py"
+      ],
+      "cwd": "${workspaceFolder}/api",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
+      },
+      "justMyCode": false,
+      "module": "streamlit",
+      "name": "Streamlit",
+      "request": "launch",
+      "type": "python"
+    }
+  ],
+  "version": "0.2.0"
 }

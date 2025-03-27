@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import bcrypt
@@ -9,9 +10,9 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from models import User, get_session
+from rag.models import User, get_session
 
-SECRET_KEY = "81e7ad176e1d9e40d3c467791f4b7b11b76700e9ad9f5e3d119f3537d11e4b46"
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "81e7ad176e1d9e40d3c467791f4b7b11b76700e9ad9f5e3d119f3537d11e4b46"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -51,9 +52,9 @@ def authenticate_user(username: str, password: str, session: Session):
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire_time = datetime.now(tz=timezone.utc) + expires_delta
+        expire_time = datetime.now(tz=UTC) + expires_delta
     else:
-        expire_time = datetime.now(tz=timezone.utc) + timedelta(minutes=15)
+        expire_time = datetime.now(tz=UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire_time})
     encoded_jwt = jwt.encode(payload=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

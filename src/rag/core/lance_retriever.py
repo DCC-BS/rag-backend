@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.schema import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
-from typing_extensions import override
 
 from lancedb.db import Table
 from lancedb.rerankers import Reranker
@@ -29,27 +28,24 @@ class LanceDBRetriever(BaseRetriever):
     )
 
     @override
-    def _get_relevant_documents(  # pyright: ignore
+    def _get_relevant_documents(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         query: str,
         *,
         run_manager: CallbackManagerForRetrieverRun,
         user_organization: str,
     ) -> list[Document]:
-        filter: str = f"metadata.organization IN ('{user_organization}')"
+        filter_query: str = f"metadata.organization IN ('{user_organization}')"
         vector: list[float] = self.embeddings.embed_query(text=query)
 
         results: list[dict[Any, Any]] = (
             self.table.search(query_type="hybrid")
             .vector(vector)
             .text(text=query)
-            .where(where=filter, prefilter=True)
+            .where(where=filter_query, prefilter=True)
             .limit(limit=self.config.docs_before_rerank)
             .rerank(reranker=self.reranker)
             .limit(limit=self.config.k)
             .to_list()
         )
-        return [
-            Document(page_content=result["text"], metadata=result["metadata"])
-            for result in results
-        ]
+        return [Document(page_content=result["text"], metadata=result["metadata"]) for result in results]

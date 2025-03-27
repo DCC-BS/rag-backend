@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Dict, List, Optional
 
 from langchain.schema import Document
 from pydantic import BaseModel
@@ -28,22 +27,18 @@ class StreamResponse(BaseModel):
 
     type: StreamResponseType
     message: str
-    decision: Optional[str] = None
-    documents: Optional[List[Document]] = None
-    answer: Optional[str] = None
-    metadata: Optional[Dict] = None
+    decision: str | None = None
+    documents: list[Document] | None = None
+    answer: str | None = None
+    metadata: dict | None = None
 
     @classmethod
-    def create_status(
-        cls, message: str, decision: Optional[str] = None
-    ) -> "StreamResponse":
+    def create_status(cls, message: str, decision: str | None = None) -> "StreamResponse":
         """Create a simple status update response"""
         return cls(type=StreamResponseType.STATUS, message=message, decision=decision)
 
     @classmethod
-    def create_document_response(
-        cls, message: str, docs: List[Document]
-    ) -> "StreamResponse":
+    def create_document_response(cls, message: str, docs: list[Document]) -> "StreamResponse":
         """Create a response containing retrieved documents"""
         return cls(type=StreamResponseType.DOCUMENTS, message=message, documents=docs)
 
@@ -53,10 +48,6 @@ class StreamResponse(BaseModel):
         return cls(type=StreamResponseType.ANSWER, message=message, answer=answer_text)
 
     @classmethod
-    def create_interrupt_response(
-        cls, message: str, **interrupt_data
-    ) -> "StreamResponse":
+    def create_interrupt_response(cls, message: str, **interrupt_data) -> "StreamResponse":
         """Create a response for user interaction interrupts"""
-        return cls(
-            type=StreamResponseType.INTERRUPT, message=message, metadata=interrupt_data
-        )
+        return cls(type=StreamResponseType.INTERRUPT, message=message, metadata=interrupt_data)

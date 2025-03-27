@@ -27,9 +27,7 @@ def render_pdf(file_path: str, page_number: int) -> str:
 
         b64 = base64.b64encode(output.getvalue()).decode()
 
-        href = (
-            f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800px'></iframe>"
-        )
+        href = f"<iframe src='data:application/pdf;base64,{b64}' width='100%' height='800px'></iframe>"
 
         return href
 

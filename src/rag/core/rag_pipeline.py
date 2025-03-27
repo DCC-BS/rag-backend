@@ -1,7 +1,7 @@
 import asyncio
 import re
-from collections.abc import Iterator
-from typing import AsyncIterator, Literal
+from collections.abc import AsyncIterator, Iterator
+from typing import Literal
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -13,13 +13,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Interrupt, interrupt
-from omegaconf.listconfig import ListConfig
-from omegaconf.omegaconf import DictConfig
 from pydantic import SecretStr
 
-from core.bento_embeddings import BentoMLReranker
-from core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
-from core.rag_states import (
+from rag.core.bento_embeddings import BentoMLReranker
+from rag.core.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
+from rag.core.rag_states import (
     GradeAnswer,
     GradeDocuments,
     GradeHallucination,
@@ -28,15 +26,15 @@ from core.rag_states import (
     RAGState,
     RouteQuery,
 )
-from data.document_storage import get_lancedb_doc_store
-from utils.config import get_config
-from utils.stream_response import StreamResponse
+from rag.data.document_storage import get_lancedb_doc_store
+from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.stream_response import StreamResponse
 
 
 class SHRAGPipeline:
     def __init__(self) -> None:
-        self.logger = structlog.stdlib.get_logger()
-        self.config: DictConfig | ListConfig = get_config()
+        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.config: AppConfig = ConfigurationManager.get_config()
         self.system_prompt: str = (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
             "You are given a question and a context of documents that are relevant to the question. "
@@ -53,18 +51,12 @@ class SHRAGPipeline:
         self.retriever = self._setup_retriever()
         self.llm = self._setup_llm()
         self.query_rewriter_llm = self._setup_llm(temperature=0.8)
-        self.structured_llm_router = self.llm.with_structured_output(
-            RouteQuery, method="json_schema"
-        )
-        self.structured_llm_grade_documents = self.llm.with_structured_output(
-            GradeDocuments, method="json_schema"
-        )
+        self.structured_llm_router = self.llm.with_structured_output(RouteQuery, method="json_schema")
+        self.structured_llm_grade_documents = self.llm.with_structured_output(GradeDocuments, method="json_schema")
         self.structured_llm_grade_hallucination = self.llm.with_structured_output(
             GradeHallucination, method="json_schema"
         )
-        self.structured_llm_grade_answer = self.llm.with_structured_output(
-            GradeAnswer, method="json_schema"
-        )
+        self.structured_llm_grade_answer = self.llm.with_structured_output(GradeAnswer, method="json_schema")
         self.memory: MemorySaver = MemorySaver()
 
         # Setup update handlers
@@ -73,13 +65,13 @@ class SHRAGPipeline:
                 message="Relevante Dokumente gefunden", docs=data.get("context", [])
             ),
             "route_question": lambda data: StreamResponse.create_status(
-                message=f"{'Suche relevante Dokumente' if data.get('route_query') == 'retrieval' else 'Antworte auf die Frage'}",
+                message=f"{"Suche relevante Dokumente" if data.get("route_query") == "retrieval" else "Antworte auf die Frage"}",
             ),
             "filter_documents": lambda data: StreamResponse.create_status(
-                message=f"{len(data.get('context', []))} Dokumente sind relevant."
+                message=f"{len(data.get("context", []))} Dokumente sind relevant."
             ),
             "transform_query": lambda data: StreamResponse.create_status(
-                message=f"Frage umformuliert: {data.get('input')}"
+                message=f"Frage umformuliert: {data.get("input")}"
             ),
             "query_needs_rephrase": lambda data: StreamResponse.create_status(
                 message="Die Frage muss umformuliert werden",
@@ -99,17 +91,13 @@ class SHRAGPipeline:
         }
 
         # Create graph
-        workflow: StateGraph = StateGraph(
-            state_schema=RAGState, input=InputState, output=OutputState
-        )
+        workflow: StateGraph = StateGraph(state_schema=RAGState, input=InputState, output=OutputState)
         # Add nodes
         workflow.add_node("route_question", self.route_question)
         workflow.add_node("retrieve", self.retrieve)
         workflow.add_node("filter_documents", self.filter_documents)
         workflow.add_node("transform_query", self.transform_query)
-        workflow.add_node(
-            "user_review_rewritten_query", self.user_review_rewritten_query
-        )
+        workflow.add_node("user_review_rewritten_query", self.user_review_rewritten_query)
         workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
         workflow.add_node("grade_hallucination", self.grade_hallucination)
         workflow.add_node("grade_answer", self.grade_answer)
@@ -119,9 +107,7 @@ class SHRAGPipeline:
         workflow.add_edge(start_key=START, end_key="route_question")
         workflow.add_edge(start_key="retrieve", end_key="filter_documents")
         workflow.add_edge(start_key="filter_documents", end_key="query_needs_rephrase")
-        workflow.add_edge(
-            start_key="transform_query", end_key="user_review_rewritten_query"
-        )
+        workflow.add_edge(start_key="transform_query", end_key="user_review_rewritten_query")
         workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
         workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
@@ -129,9 +115,7 @@ class SHRAGPipeline:
         self.graph = workflow.compile(checkpointer=self.memory)
         self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
-    def retrieve(
-        self, state: RAGState, config: RunnableConfig
-    ) -> dict[str, list[Document]]:
+    def retrieve(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         docs: list[Document] = self.retriever.invoke(
             input=state["input"],
             user_organization=state["user_organization"],
@@ -157,23 +141,17 @@ class SHRAGPipeline:
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""
-        context_messages = [
-            (message.type, message.content) for message in state["messages"][1:]
-        ]
-        route_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                *context_messages,  # pyright: ignore[reportArgumentType]
-                (
-                    "user",
-                    "Can you answer the following question based on the conversation history? Question: {question}",
-                ),
-            ]
-        )
+        context_messages = [(message.type, message.content) for message in state["messages"][1:]]
+        route_prompt = ChatPromptTemplate.from_messages([
+            ("system", system),
+            *context_messages,  # pyright: ignore[reportArgumentType]
+            (
+                "user",
+                "Can you answer the following question based on the conversation history? Question: {question}",
+            ),
+        ])
         question_router = route_prompt | self.structured_llm_router
-        routing_result: RouteQuery = question_router.invoke(
-            {"question": state["input"]}, config
-        )  # pyright: ignore[reportAssignmentType]
+        routing_result: RouteQuery = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
         if routing_result.next_step == "answer":
             self.logger.info("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(
@@ -187,9 +165,7 @@ class SHRAGPipeline:
                 goto="retrieve",
             )
         else:
-            raise ValueError(
-                f"Unexpected routing next step: {routing_result.next_step}"
-            )
+            raise ValueError(f"Unexpected routing next step: {routing_result.next_step}")
 
     def grade_hallucination(
         self, state: RAGState, config: RunnableConfig
@@ -203,22 +179,16 @@ class SHRAGPipeline:
         If the answer is not grounded in the retrieved documents, return 'yes'.
         If the answer is grounded in the retrieved document, return 'no'.
         """
-        hallucination_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                ("user", "Retrieved documents: {documents} \\n Answer: {answer}"),
-            ]
-        )
-        hallucination_grader = (
-            hallucination_prompt | self.structured_llm_grade_hallucination
-        )
+        hallucination_prompt = ChatPromptTemplate.from_messages([
+            ("system", system),
+            ("user", "Retrieved documents: {documents} \\n Answer: {answer}"),
+        ])
+        hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
         if state["context"] is None:
             raise ValueError("Context is None")
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
-                "documents": "\n\n".join(
-                    [doc.page_content for doc in state["context"]]
-                ),
+                "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
                 "answer": state["answer"],
             },
             config,
@@ -236,23 +206,19 @@ class SHRAGPipeline:
                 goto="grade_answer",
             )
 
-    def grade_answer(
-        self, state: RAGState, config: RunnableConfig
-    ) -> Command[Literal["transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
+    def grade_answer(self, state: RAGState, config: RunnableConfig) -> Command[Literal["transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
         """
         Grade answer generation.
         """
         self.logger.info("---GRADE ANSWER---")
-        system = """You are a grader assessing relevance of an answer to a user question. \n 
+        system = """You are a grader assessing relevance of an answer to a user question. \n
             If the answer is relevant to the question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
             Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question."""
-        answer_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                ("user", "Answer: {answer} \\n User question: {question}"),
-            ]
-        )
+        answer_prompt = ChatPromptTemplate.from_messages([
+            ("system", system),
+            ("user", "Answer: {answer} \\n User question: {question}"),
+        ])
         answer_grader = answer_prompt | self.structured_llm_grade_answer
         answer_result: GradeAnswer = answer_grader.invoke(
             {"answer": state["answer"], "question": state["input"]}, config
@@ -283,19 +249,17 @@ class SHRAGPipeline:
             dict: The filtered documents
         """
         self.logger.info("---FILTER DOCUMENTS---")
-        system = """You are a grader assessing relevance of a retrieved document to a user question. \n 
+        system = """You are a grader assessing relevance of a retrieved document to a user question. \n
             If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous retrievals. \n
             Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
-        grade_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                (
-                    "user",
-                    "Retrieved document: {document} \\n User question: {question}",
-                ),
-            ]
-        )
+        grade_prompt = ChatPromptTemplate.from_messages([
+            ("system", system),
+            (
+                "user",
+                "Retrieved document: {document} \\n User question: {question}",
+            ),
+        ])
         grade_documents_llm = grade_prompt | self.structured_llm_grade_documents
         question: str = state["input"]
         relevant_documents: list[Document] = []
@@ -304,9 +268,7 @@ class SHRAGPipeline:
                 {"document": doc.page_content, "question": question}, config
             )  # pyright: ignore[reportAssignmentType]
             if grade_documents_result.binary_score == "no":
-                self.logger.info(
-                    f"Document {doc.metadata['filename']} is not relevant to the question."
-                )
+                self.logger.info(f"Document {doc.metadata["filename"]} is not relevant to the question.")
             else:
                 relevant_documents.append(doc)
         return {"context": relevant_documents, "input": question}
@@ -358,7 +320,7 @@ class SHRAGPipeline:
                     goto="transform_query",
                 )
             else:
-                raise ValueError(f"Unexpected review action: {human_review['action']}")
+                raise ValueError(f"Unexpected review action: {human_review["action"]}")
         else:
             # Case 2: Model has rewritten query and needs approval
             human_review = interrupt(
@@ -376,7 +338,7 @@ class SHRAGPipeline:
                     goto="retrieve",
                 )
             else:
-                raise ValueError(f"Unexpected review action: {human_review['action']}")
+                raise ValueError(f"Unexpected review action: {human_review["action"]}")
 
     def transform_query(self, state: RAGState, config: RunnableConfig):
         """
@@ -390,7 +352,7 @@ class SHRAGPipeline:
         """
 
         self.logger.info("---TRANSFORM QUERY---")
-        system = """You are an expert question re-writer that converts an input question to a better version that is optimized 
+        system = """You are an expert question re-writer that converts an input question to a better version that is optimized
             for vectorstore retrieval. Look at the input and try to reason about the underlying semantic intent / meaning.
             The vectorstore contains documents from this domain: {document_description}.
             Write the re-phrased retrieval query in German as a question enclosed in <query> tags.
@@ -398,21 +360,17 @@ class SHRAGPipeline:
             The re-phrased question must be relevant to the initial user's question and keep the same meaning and intent.
             If you need more information, return "more_information".
 
-            For example, if the input question is "Kindergeld", the re-phrased query should be 
+            For example, if the input question is "Kindergeld", the re-phrased query should be
             <query>Habe ich Anspruch auf Kindergeld?</query>.
             """
-        re_write_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                (
-                    "user",
-                    "Here is the initial question: \n\n {question} \n Formulate an improved query enclosed in <query> tags.",
-                ),
-            ]
-        )
-        question_rewriter = (
-            re_write_prompt | self.query_rewriter_llm | StrOutputParser()
-        )
+        re_write_prompt = ChatPromptTemplate.from_messages([
+            ("system", system),
+            (
+                "user",
+                "Here is the initial question: \n\n {question} \n Formulate an improved query enclosed in <query> tags.",
+            ),
+        ])
+        question_rewriter = re_write_prompt | self.query_rewriter_llm | StrOutputParser()
         question = state["input"]
         document_description = self.config.DOC_STORE.DOCUMENT_DESCRIPTION
 
@@ -441,30 +399,21 @@ class SHRAGPipeline:
         # Format context with document metadata for citations
         formatted_context: list[str] = []
         for doc in state["context"]:  # pyright: ignore[reportOptionalIterable]
-            formatted_context.append(
-                f"Content: {doc.page_content}\n"
-                f"Source: {doc.metadata.get('filename', 'unknown')}"
-            )
+            formatted_context.append(f"Content: {doc.page_content}\nSource: {doc.metadata.get("filename", "unknown")}")
 
         context: str = "\n\n".join(formatted_context)
 
-        template = ChatPromptTemplate(
-            [
-                ("user", "Context: {context}\n\nQuestion: {input}"),
-            ]
-        )
-        prompt = await template.ainvoke(
-            {"context": context, "input": state["input"]}, config
-        )
-        messages = state["messages"] + prompt.messages  # pyright: ignore
+        template = ChatPromptTemplate([
+            ("user", "Context: {context}\n\nQuestion: {input}"),
+        ])
+        prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
+        messages = state["messages"] + prompt.messages
         response = await self.llm.ainvoke(messages, config)
-        return {"messages": messages + [response], "answer": response.content}
+        return {"messages": [*messages, response], "answer": response.content}
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
-        reranker = BentoMLReranker(
-            api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key
-        )
+        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key)
         if vector_store.embeddings is None:
             raise ValueError("Embeddings are None")
         if vector_store._text_key is None:
@@ -506,60 +455,49 @@ class SHRAGPipeline:
     ) -> AsyncIterator[StreamResponse]:
         if resume_action is not None:
             # Resume execution case
-            input = Command(resume={"action": resume_action, "data": resume_data})
+            user_input = Command(resume={"action": resume_action, "data": resume_data})
             if thread_id is None:
                 raise ValueError("thread_id is required when resuming execution")
         else:
             # New query case
             if question is None or user_organization is None or thread_id is None:
-                raise ValueError(
-                    "question, user_organization, and thread_id are required for new queries"
-                )
-            input = {"input": question, "user_organization": user_organization}
+                raise ValueError("question, user_organization, and thread_id are required for new queries")
+            user_input = {"input": question, "user_organization": user_organization}
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
-        config = RunnableConfig(
-            recursion_limit=recursion_limit, configurable={"thread_id": thread_id}
-        )
+        config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
-        async for chunk in self.graph.astream(
-            input=input, stream_mode=["updates"], config=config
-        ):
+        async for chunk in self.graph.astream(input=user_input, stream_mode=["updates"], config=config):
             kind, content = chunk
-            if kind == "updates":
+            if kind == "updates" and isinstance(content, dict):
                 # Each update may include outputs from one or several nodes.
-                if isinstance(content, dict):
-                    for key, update in content.items():
-                        if key in self.update_handlers:
-                            yield self.update_handlers[key](update)
-                        elif key == "__interrupt__":
-                            self.logger.info(f"Interrupt: {content}")
-                            interrupt = update[0]
-                            if isinstance(interrupt, Interrupt):
-                                question_to_user = interrupt.value["question"]
-                                rewritten_query = interrupt.value["rewritten_query"]
-                                interrupt_type = interrupt.value["type"]
-                                yield StreamResponse.create_interrupt_response(
-                                    message="Benutzerinteraktion erforderlich",
-                                    question=question_to_user,
-                                    rewritten_query=rewritten_query,
-                                    type=interrupt_type,
-                                )
-                            else:
-                                raise ValueError("Interrupt is not an Interrupt")
+                for key, update in content.items():
+                    if key in self.update_handlers:
+                        yield self.update_handlers[key](update)
+                    elif key == "__interrupt__":
+                        self.logger.info(f"Interrupt: {content}")
+                        interrupt = update[0]
+                        if isinstance(interrupt, Interrupt):
+                            question_to_user = interrupt.value["question"]
+                            rewritten_query = interrupt.value["rewritten_query"]
+                            interrupt_type = interrupt.value["type"]
+                            yield StreamResponse.create_interrupt_response(
+                                message="Benutzerinteraktion erforderlich",
+                                question=question_to_user,
+                                rewritten_query=rewritten_query,
+                                type=interrupt_type,
+                            )
                         else:
-                            self.logger.info(f"Unknown update: {key}")
+                            raise ValueError("Interrupt is not an Interrupt")
+                    else:
+                        self.logger.info(f"Unknown update: {key}")
 
-    def stream_query(
-        self, question: str, user_role: str, thread_id: str
-    ) -> Iterator[StreamResponse]:
+    def stream_query(self, question: str, user_role: str, thread_id: str) -> Iterator[StreamResponse]:
         """Synchronous wrapper around astream_query"""
         self.logger.info(f"Thread ID: {thread_id}")
 
         async def run_async():
-            async for chunk in self.astream_query(
-                question=question, user_organization=user_role, thread_id=thread_id
-            ):
+            async for chunk in self.astream_query(question=question, user_organization=user_role, thread_id=thread_id):
                 yield chunk
 
         # Create and run event loop
@@ -575,9 +513,7 @@ class SHRAGPipeline:
         finally:
             loop.close()
 
-    def resume_query(
-        self, thread_id: str, action: str, data: str | None = None
-    ) -> Iterator[StreamResponse]:
+    def resume_query(self, thread_id: str, action: str, data: str | None = None) -> Iterator[StreamResponse]:
         """Resume a RAG pipeline execution after an interrupt.
 
         Args:
@@ -588,9 +524,7 @@ class SHRAGPipeline:
         self.logger.info(f"Resuming Thread ID: {thread_id}")
 
         async def run_async():
-            async for chunk in self.astream_query(
-                thread_id=thread_id, resume_action=action, resume_data=data
-            ):
+            async for chunk in self.astream_query(thread_id=thread_id, resume_action=action, resume_data=data):
                 yield chunk
 
         # Create and run event loop

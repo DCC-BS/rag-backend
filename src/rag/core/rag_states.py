@@ -40,9 +40,7 @@ class RAGState(InputState, OutputState):
 class GradeDocuments(BaseModel):
     """Binary score for relevance check on retrieved documents."""
 
-    binary_score: Literal["yes", "no"] = Field(
-        description="Documents are relevant to the question, 'yes' or 'no'"
-    )
+    binary_score: Literal["yes", "no"] = Field(description="Documents are relevant to the question, 'yes' or 'no'")
 
 
 class GradeHallucination(BaseModel):
@@ -56,6 +54,4 @@ class GradeHallucination(BaseModel):
 class GradeAnswer(BaseModel):
     """Binary score for answer generation."""
 
-    binary_score: Literal["yes", "no"] = Field(
-        description="Answer is relevant to the question, 'yes' or 'no'"
-    )
+    binary_score: Literal["yes", "no"] = Field(description="Answer is relevant to the question, 'yes' or 'no'")

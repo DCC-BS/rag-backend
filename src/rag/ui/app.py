@@ -4,22 +4,21 @@ import uuid
 import streamlit as st
 import streamlit_authenticator as stauth
 import structlog
-from components.chat import manage_chat, render_chat_history, render_example_queries
-from components.feedback import render_feedback_section
 from dotenv import load_dotenv
-from rich.traceback import install
 
-from core.rag_pipeline import SHRAGPipeline
-from ui.constants import (
+from rag.core.rag_pipeline import SHRAGPipeline
+from rag.ui.components.chat import manage_chat, render_chat_history, render_example_queries
+from rag.ui.components.feedback import render_feedback_section
+from rag.ui.constants import (
     CONVERSATIONAL_PIPELINE,
     RELEVANT_DOCUMENTS,
     TITLE_NAME,
     UI_RENDERED_MESSAGES,
 )
-from utils.config import get_config, load_config
+from rag.utils.config import AppConfig, ConfigurationManager
 
-load_dotenv()
-install(show_locals=True)
+_ = load_dotenv()
+
 logger = structlog.stdlib.get_logger()
 
 
@@ -29,23 +28,19 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
-    logger.critical(
-        "Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback)
-    )
+    logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
 sys.excepthook = handle_exception
 
-# Load initial configuration
-load_config()
-config = get_config()
+config: AppConfig = ConfigurationManager.get_config()
 st.set_page_config(
     page_title=TITLE_NAME,
     page_icon=":speech_balloon:",
     initial_sidebar_state="auto",
     menu_items=None,
 )
-authenticator = stauth.Authenticate(**config.LOGIN_CONFIG)
+authenticator = stauth.Authenticate(**config.USER_CONFIG.LOGIN_CONFIG)
 
 
 def initialize_session_state():
@@ -82,8 +77,8 @@ def setup_page():
     st.title(TITLE_NAME)
     if st.session_state["authentication_status"]:
         authenticator.logout()
-        st.subheader(f"Daten von: {', '.join(st.session_state['roles'])}")
-        st.write(f'Hallo *{st.session_state["name"]}*')
+        st.subheader(f"Daten von: {", ".join(st.session_state["roles"])}")
+        st.write(f"Hallo *{st.session_state["name"]}*")
         render_example_queries()
         if st.session_state[CONVERSATIONAL_PIPELINE] is None:
             st.session_state[CONVERSATIONAL_PIPELINE] = SHRAGPipeline()

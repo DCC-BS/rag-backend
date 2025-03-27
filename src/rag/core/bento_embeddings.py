@@ -1,11 +1,10 @@
 import asyncio
-from typing import Any
+from typing import Any, override
 
 import bentoml
 import numpy as np
 import pyarrow as pa
 from langchain_core.embeddings import Embeddings
-from typing_extensions import override
 
 from lancedb.rerankers import Reranker
 
@@ -124,26 +123,18 @@ class BentoMLReranker(Reranker):
             documents = result_set[self.column].to_pylist()
             ranks: dict = self.client.rerank(documents=documents, query=query)
             scores = [score for _, score, _ in ranks.values()]
-            result_set = result_set.append_column(
-                "_relevance_score", pa.array(scores, type=pa.float32())
-            )
+            result_set = result_set.append_column("_relevance_score", pa.array(scores, type=pa.float32()))
         return result_set
 
-    def rerank_hybrid(
-        self, query: str, vector_results: pa.Table, fts_results: pa.Table
-    ) -> pa.Table:
+    def rerank_hybrid(self, query: str, vector_results: pa.Table, fts_results: pa.Table) -> pa.Table:
         combined_results = self.merge_results(vector_results, fts_results)
         combined_results = self._rerank(result_set=combined_results, query=query)
 
         if self.score == "relevance":
             combined_results = self._keep_relevance_score(combined_results)
         elif self.score == "all":
-            raise NotImplementedError(
-                "return_score='all' not implemented for BentoML Reranker"
-            )
-        combined_results = combined_results.sort_by(
-            [("_relevance_score", "descending")]
-        )
+            raise NotImplementedError("return_score='all' not implemented for BentoML Reranker")
+        combined_results = combined_results.sort_by([("_relevance_score", "descending")])
         return combined_results
 
     def rerank_vector(self, query: str, vector_results: pa.Table) -> pa.Table:
