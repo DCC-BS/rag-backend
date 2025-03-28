@@ -20,9 +20,9 @@
     {
       "args": [
         "run",
-        "ui/app.py"
+        "src/rag/ui/app.py"
       ],
-      "cwd": "${workspaceFolder}/api",
+      "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
       },
@@ -35,9 +35,9 @@
     {
       "args": [
         "run",
-        "ui/app.py"
+        "src/rag/ui/app.py"
       ],
-      "cwd": "${workspaceFolder}/api",
+      "cwd": "${workspaceFolder}",
       "env": {
         "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
       },

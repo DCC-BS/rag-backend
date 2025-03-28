@@ -67,16 +67,8 @@ class LoginCookieConfig:
 
 @dataclass
 class LoginConfig:
-    credentials: dict[str, LoginCredentials]
+    credentials: dict[str, dict[str, LoginCredentials]]
     cookie: LoginCookieConfig
-
-
-@dataclass
-class UserConfig:
-    ROLES: list[str]
-    DATA_DIR: str
-    DOC_SOURCES: dict[str, str]
-    LOGIN_CONFIG: LoginConfig
 
 
 @dataclass
@@ -90,7 +82,10 @@ class AppConfig:
     LLM: LLMConfig
     DOCLING: DoclingConfig
     CHAT: ChatConfig
-    USER_CONFIG: UserConfig
+    ROLES: list[str]
+    DATA_DIR: str
+    DOC_SOURCES: dict[str, str]
+    LOGIN_CONFIG: LoginConfig
 
 
 class ConfigurationManager:
@@ -109,11 +104,11 @@ class ConfigurationManager:
             OmegaConf.clear_resolvers()
 
             # Create base config with schema
-            schema = OmegaConf.structured(AppConfig)
+            schema = OmegaConf.structured(AppConfig)  # pyright: ignore[reportAny]
             config = OmegaConf.create()
 
             # Recursively find all yaml files in conf directory
-            conf_dir = Path("conf")
+            conf_dir = Path("src/rag/conf")
             yaml_files = sorted([f for f in conf_dir.rglob("*.yaml") if f.is_file()], key=lambda x: x.as_posix())
 
             # Merge all configs with schema validation
@@ -125,7 +120,7 @@ class ConfigurationManager:
                     print(f"Error loading config from {conf_file}: {e}")
 
             # Merge schema with loaded config and convert to object
-            merged_config = OmegaConf.merge(schema, config)
+            merged_config = OmegaConf.merge(schema, config)  # pyright: ignore[reportAny]
             config_obj = OmegaConf.to_object(merged_config)
             if not isinstance(config_obj, AppConfig):
                 raise ValueError("Failed to load configuration with correct type")

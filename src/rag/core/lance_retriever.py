@@ -7,8 +7,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
 
-from lancedb.db import Table
 from lancedb.rerankers import Reranker
+from lancedb.table import Table
 
 
 @dataclass

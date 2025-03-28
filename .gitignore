@@ -1,15 +1,14 @@
 data
-!api/data
+!src/rag/data
 __pychache__
 lancedb
-api/conf/local/*
+./src/rag/conf/local/users.yaml
 __pycache__/
 *.log
 .ruff_cache
-api/feedback.csv
-api/.venv
-api/logs/
-api/database.db
+./src/rag/feedback.csv
+./src/rag/logs/
+./src/rag/database.db
 
 docs/source
 

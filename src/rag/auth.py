@@ -49,8 +49,8 @@ def authenticate_user(username: str, password: str, session: Session):
     return user
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    to_encode = data.copy()
+def create_access_token(data: dict[str, str | datetime], expires_delta: timedelta | None = None) -> str:
+    to_encode: dict[str, str | datetime] = data.copy()
     if expires_delta:
         expire_time = datetime.now(tz=UTC) + expires_delta
     else:
@@ -73,9 +73,9 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(jwt=token, key=SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("username")
-        if username is None:
+        payload: dict[str, str | datetime] = jwt.decode(jwt=token, key=SECRET_KEY, algorithms=[ALGORITHM])
+        username: str | None | datetime = payload.get("username")
+        if username is None or not isinstance(username, str):
             raise credentials_exception
         token_data = TokenData(username=username)
     except InvalidTokenError as err:

@@ -1,3 +1,5 @@
+from collections.abc import Generator
+
 from sqlmodel import Field, Session, SQLModel, create_engine
 
 sqlite_file_name = "database.db"
@@ -18,6 +20,6 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
 
-def get_session():
+def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
         yield session

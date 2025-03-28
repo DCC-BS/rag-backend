@@ -1,9 +1,10 @@
 import argparse
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 
-from auth import get_password_hash
-from models import User, create_db_and_tables, engine
 from sqlmodel import Session, select
+
+from rag.auth import get_password_hash
+from rag.models import User, create_db_and_tables, engine
 
 
 def create_user(username: str, password: str, organization: str, disabled: bool) -> None:
@@ -25,16 +26,30 @@ def create_user(username: str, password: str, organization: str, disabled: bool)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Create a new user in the SQLite user database.")
-    parser.add_argument("username", help="Username for the new user")
-    parser.add_argument("password", help="Password for the new user")
-    parser.add_argument(
+    parser: ArgumentParser = argparse.ArgumentParser(description="Create a new user in the SQLite user database.")
+    _ = parser.add_argument("username", help="Username for the new user")
+    _ = parser.add_argument("password", help="Password for the new user")
+    _ = parser.add_argument(
         "--organization",
         default="",
         help="Leave empty for no organization.",
     )
-    parser.add_argument("--disabled", action="store_true", help="Mark the user as disabled")
+    _ = parser.add_argument("--disabled", action="store_true", help="Mark the user as disabled")
     args: Namespace = parser.parse_args()
 
-    create_db_and_tables()  # Ensure the tables exist before inserting
-    create_user(args.username, args.password, args.organization, args.disabled)
+    create_db_and_tables()
+    if args.username is not None:
+        raise ValueError("Username is required")
+    if args.password is not None:
+        raise ValueError("Password is required")
+    if args.organization is not None:
+        raise ValueError("Organization is required")
+    if not isinstance(args.username, str):
+        raise ValueError("Username must be a string")
+    if not isinstance(args.password, str):
+        raise ValueError("Password must be a string")
+    if not isinstance(args.organization, str):
+        raise ValueError("Organization must be a string")
+    if not isinstance(args.disabled, bool):
+        raise ValueError("Disabled must be a boolean")
+    create_user(username=args.username, password=args.password, organization=args.organization, disabled=args.disabled)

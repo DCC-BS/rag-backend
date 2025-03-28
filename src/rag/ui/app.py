@@ -40,7 +40,12 @@ st.set_page_config(
     initial_sidebar_state="auto",
     menu_items=None,
 )
-authenticator = stauth.Authenticate(**config.USER_CONFIG.LOGIN_CONFIG)
+authenticator = stauth.Authenticate(
+    credentials=config.LOGIN_CONFIG.credentials,
+    cookie_name=config.LOGIN_CONFIG.cookie.name,
+    cookie_key=config.LOGIN_CONFIG.cookie.key,
+    cookie_expiry_days=config.LOGIN_CONFIG.cookie.expiry_days,
+)
 
 
 def initialize_session_state():

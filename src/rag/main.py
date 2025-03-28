@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlmodel import Session
 
 from rag.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -19,7 +20,7 @@ from rag.auth import (
     get_current_user,
 )
 from rag.core.rag_pipeline import SHRAGPipeline
-from rag.models import create_db_and_tables, get_session
+from rag.models import User, create_db_and_tables, get_session
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
@@ -29,7 +30,7 @@ TOKEN_TYPE = os.environ.get("TOKEN_TYPE") or "bearer"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # pyright: ignore[reportUnusedParameter]
     create_db_and_tables()
     state["pipeline"] = SHRAGPipeline()
     yield
@@ -56,7 +57,7 @@ app.add_middleware(
 @app.get("/stream_query")
 async def stream_query(
     question: str,
-    current_user: Annotated[Any, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     thread_id: str = "default",
 ) -> StreamingResponse:
     async def event_generator() -> AsyncGenerator[str, Any]:
@@ -71,7 +72,7 @@ async def stream_query(
         except StopAsyncIteration as e:
             # Handle the intentional generator stop with return value
             if hasattr(e, "value"):
-                yield f"{e.value}\n"
+                yield f"{e.value}\n"  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
         except Exception as e:
             logger.error(
                 "Error processing stream query",
@@ -94,7 +95,7 @@ async def stream_query(
 @app.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    session: Annotated[Any, Depends(get_session)],
+    session: Annotated[Session, Depends(get_session)],
 ) -> Token:
     user = authenticate_user(
         username=form_data.username,

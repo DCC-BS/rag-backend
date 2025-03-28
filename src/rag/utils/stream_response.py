@@ -30,7 +30,7 @@ class StreamResponse(BaseModel):
     decision: str | None = None
     documents: list[Document] | None = None
     answer: str | None = None
-    metadata: dict | None = None
+    metadata: dict[str, str] | None = None
 
     @classmethod
     def create_status(cls, message: str, decision: str | None = None) -> "StreamResponse":
@@ -48,6 +48,6 @@ class StreamResponse(BaseModel):
         return cls(type=StreamResponseType.ANSWER, message=message, answer=answer_text)
 
     @classmethod
-    def create_interrupt_response(cls, message: str, **interrupt_data) -> "StreamResponse":
+    def create_interrupt_response(cls, message: str, interrupt_data: dict[str, str]) -> "StreamResponse":
         """Create a response for user interaction interrupts"""
         return cls(type=StreamResponseType.INTERRUPT, message=message, metadata=interrupt_data)

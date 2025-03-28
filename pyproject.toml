@@ -33,6 +33,7 @@ dependencies = [
     "sqlmodel>=0.0.22",
     "structlog>=25.1.0",
     "version-pioneer>=0.0.13",
+    "pylance>=0.25.1",
 ]
 
 [project.urls]
@@ -117,6 +118,7 @@ testpaths = ["tests"]
 target-version = "py312"
 line-length = 120
 fix = true
+exclude = ["**/stubs/**"]
 
 [tool.ruff.lint]
 select = [

@@ -1,17 +1,18 @@
 import asyncio
 import re
-from collections.abc import AsyncIterator, Iterator
-from typing import Literal
+from collections.abc import AsyncIterator, Callable, Iterator
+from typing import Any, Literal
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema import Document
+from langchain.schema import BaseMessage, Document
 from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, Interrupt, interrupt
 from pydantic import SecretStr
 
@@ -48,10 +49,10 @@ class SHRAGPipeline:
         )
 
         # Setup components
-        self.retriever = self._setup_retriever()
-        self.llm = self._setup_llm()
-        self.query_rewriter_llm = self._setup_llm(temperature=0.8)
-        self.structured_llm_router = self.llm.with_structured_output(RouteQuery, method="json_schema")
+        self.retriever: LanceDBRetriever = self._setup_retriever()
+        self.llm: ChatOpenAI = self._setup_llm()
+        self.query_rewriter_llm: ChatOpenAI = self._setup_llm(temperature=0.8)
+        self.structured_llm_router = self.llm.with_structured_output(schema=RouteQuery, method="json_schema")
         self.structured_llm_grade_documents = self.llm.with_structured_output(GradeDocuments, method="json_schema")
         self.structured_llm_grade_hallucination = self.llm.with_structured_output(
             GradeHallucination, method="json_schema"
@@ -60,7 +61,7 @@ class SHRAGPipeline:
         self.memory: MemorySaver = MemorySaver()
 
         # Setup update handlers
-        self.update_handlers = {
+        self.update_handlers: dict[str, Callable[[dict[str, Any]], StreamResponse]] = {
             "retrieve": lambda data: StreamResponse.create_document_response(
                 message="Relevante Dokumente gefunden", docs=data.get("context", [])
             ),
@@ -93,27 +94,27 @@ class SHRAGPipeline:
         # Create graph
         workflow: StateGraph = StateGraph(state_schema=RAGState, input=InputState, output=OutputState)
         # Add nodes
-        workflow.add_node("route_question", self.route_question)
-        workflow.add_node("retrieve", self.retrieve)
-        workflow.add_node("filter_documents", self.filter_documents)
-        workflow.add_node("transform_query", self.transform_query)
-        workflow.add_node("user_review_rewritten_query", self.user_review_rewritten_query)
-        workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
-        workflow.add_node("grade_hallucination", self.grade_hallucination)
-        workflow.add_node("grade_answer", self.grade_answer)
-        workflow.add_node("generate_answer", self.generate_answer)
+        _ = workflow.add_node("route_question", self.route_question)
+        _ = workflow.add_node("retrieve", self.retrieve)
+        _ = workflow.add_node("filter_documents", self.filter_documents)
+        _ = workflow.add_node("transform_query", self.transform_query)
+        _ = workflow.add_node("user_review_rewritten_query", self.user_review_rewritten_query)
+        _ = workflow.add_node("query_needs_rephrase", self.decide_if_query_needs_rewriting)
+        _ = workflow.add_node("grade_hallucination", self.grade_hallucination)
+        _ = workflow.add_node("grade_answer", self.grade_answer)
+        _ = workflow.add_node("generate_answer", self.generate_answer)
 
         # Add conditional edge based on skip_retrieval
-        workflow.add_edge(start_key=START, end_key="route_question")
-        workflow.add_edge(start_key="retrieve", end_key="filter_documents")
-        workflow.add_edge(start_key="filter_documents", end_key="query_needs_rephrase")
-        workflow.add_edge(start_key="transform_query", end_key="user_review_rewritten_query")
-        workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
-        workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
+        _ = workflow.add_edge(start_key=START, end_key="route_question")
+        _ = workflow.add_edge(start_key="retrieve", end_key="filter_documents")
+        _ = workflow.add_edge(start_key="filter_documents", end_key="query_needs_rephrase")
+        _ = workflow.add_edge(start_key="transform_query", end_key="user_review_rewritten_query")
+        _ = workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
+        _ = workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
         # Compile graph
-        self.graph = workflow.compile(checkpointer=self.memory)
-        self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
+        self.graph: CompiledStateGraph = workflow.compile(checkpointer=self.memory)
+        _ = self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
     def retrieve(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         docs: list[Document] = self.retriever.invoke(
@@ -141,15 +142,19 @@ class SHRAGPipeline:
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""
-        context_messages = [(message.type, message.content) for message in state["messages"][1:]]
-        route_prompt = ChatPromptTemplate.from_messages([
-            ("system", system),
-            *context_messages,  # pyright: ignore[reportArgumentType]
-            (
-                "user",
-                "Can you answer the following question based on the conversation history? Question: {question}",
-            ),
-        ])
+        context_messages: list[tuple[str, str | list[str | dict[Any, Any]]]] = [
+            (message.type, message.content) for message in state["messages"][1:]
+        ]
+        route_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
+            messages=[
+                ("system", system),
+                *context_messages,  # pyright: ignore[reportArgumentType]
+                (
+                    "user",
+                    "Can you answer the following question based on the conversation history? Question: {question}",
+                ),
+            ]
+        )
         question_router = route_prompt | self.structured_llm_router
         routing_result: RouteQuery = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
         if routing_result.next_step == "answer":
@@ -206,7 +211,7 @@ class SHRAGPipeline:
                 goto="grade_answer",
             )
 
-    def grade_answer(self, state: RAGState, config: RunnableConfig) -> Command[Literal["transform_query"]]:  # pyright: ignore[reportInvalidTypeForm]
+    def grade_answer(self, state: RAGState, config: RunnableConfig) -> Command[Literal["transform_query"]]:
         """
         Grade answer generation.
         """
@@ -215,10 +220,12 @@ class SHRAGPipeline:
             If the answer is relevant to the question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
             Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question."""
-        answer_prompt = ChatPromptTemplate.from_messages([
-            ("system", system),
-            ("user", "Answer: {answer} \\n User question: {question}"),
-        ])
+        answer_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
+            messages=[
+                ("system", system),
+                ("user", "Answer: {answer} \\n User question: {question}"),
+            ]
+        )
         answer_grader = answer_prompt | self.structured_llm_grade_answer
         answer_result: GradeAnswer = answer_grader.invoke(
             {"answer": state["answer"], "question": state["input"]}, config
@@ -407,19 +414,20 @@ class SHRAGPipeline:
             ("user", "Context: {context}\n\nQuestion: {input}"),
         ])
         prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
-        messages = state["messages"] + prompt.messages
+        messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())
         response = await self.llm.ainvoke(messages, config)
         return {"messages": [*messages, response], "answer": response.content}
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
-        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key)
         if vector_store.embeddings is None:
             raise ValueError("Embeddings are None")
         if vector_store._text_key is None:
             raise ValueError("Vector store has no text key")
         if vector_store._vector_key is None:
             raise ValueError("Vector store has no vector key")
+
+        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key)
         retriever = LanceDBRetriever(
             table=vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),
             embeddings=vector_store.embeddings,
@@ -483,9 +491,11 @@ class SHRAGPipeline:
                             interrupt_type = interrupt.value["type"]
                             yield StreamResponse.create_interrupt_response(
                                 message="Benutzerinteraktion erforderlich",
-                                question=question_to_user,
-                                rewritten_query=rewritten_query,
-                                type=interrupt_type,
+                                interrupt_data={
+                                    "question": question_to_user,
+                                    "rewritten_query": rewritten_query,
+                                    "type": interrupt_type,
+                                },
                             )
                         else:
                             raise ValueError("Interrupt is not an Interrupt")

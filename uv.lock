@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.12, <4.0"
 resolution-markers = [
     "python_full_version >= '3.12.4' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
@@ -2945,6 +2946,25 @@ wheels = [
 ]
 
 [[package]]
+name = "pylance"
+version = "0.25.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numpy", version = "2.2.4", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
+    { name = "pyarrow" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/5c/5218e07997f8ed057bf6eef554fd66b1f64ab2329190e788192c016d1848/pylance-0.25.1-cp39-abi3-macosx_10_15_x86_64.whl", hash = "sha256:8cb8ecc71bc21c666d9a3720d65bfde406b7be6bd4e05ec5674198ec772753e7", size = 33272363 },
+    { url = "https://files.pythonhosted.org/packages/a9/ee/c2a20e3529070e98049d80a895c1245e91799822624d88c13eff25c69820/pylance-0.25.1-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:36ccdc3a29164aa8b27860a508b1810f91692cd41fe6f2e6f157c96917a22635", size = 30469558 },
+    { url = "https://files.pythonhosted.org/packages/e3/01/33f785295f5bd6dc67e084d96774c9392eef53892a0ec8a3fc27eef7f785/pylance-0.25.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1168c17b78a480629268afd66e6c85b0510051f0658b27369e8bcc3e2f359482", size = 34149334 },
+    { url = "https://files.pythonhosted.org/packages/5f/0e/dac0afdacacc4044bd206a2ef7dbcfe86556535eedd89e1fba4ca3fb5e73/pylance-0.25.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e2042a7be35c6bed97ab4408a03997d9aed304a7298fd8b16504d60606b7ad98", size = 37057187 },
+    { url = "https://files.pythonhosted.org/packages/a7/45/e6b990e590664834f0ca82ec5255734053e4da29fad5f2e479056ed6cd2f/pylance-0.25.1-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:567ae878fa8874782d585d93d8424dd45d1393283401448289fa3a5cd3183cc9", size = 33842947 },
+    { url = "https://files.pythonhosted.org/packages/9c/78/4bc40d48041f1d93f872a4001c22379ea276f4c890a0929c28df0ee3cae9/pylance-0.25.1-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:b328854f3aafe34c23ce9282cb28362a741294e5830a0410afb7259458f1158b", size = 36459982 },
+    { url = "https://files.pythonhosted.org/packages/53/f0/bd5171930895cf1660303cef237c9cbd95144c414ecb80a4e7d29569aec9/pylance-0.25.1-cp39-abi3-win_amd64.whl", hash = "sha256:9e287f8e7d3c19afed33b7d2d1c90c99d3e83d416f24eed7c8d6568f50c6a24f", size = 35811190 },
+]
+
+[[package]]
 name = "pylatexenc"
 version = "2.10"
 source = { registry = "https://pypi.org/simple" }
@@ -3278,6 +3298,7 @@ dependencies = [
     { name = "omegaconf" },
     { name = "psutil" },
     { name = "pyjwt" },
+    { name = "pylance" },
     { name = "pypdf2" },
     { name = "rich" },
     { name = "sqlmodel" },
@@ -3330,6 +3351,7 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "psutil", specifier = ">=6.1.1" },
     { name = "pyjwt", specifier = ">=2.10.1" },
+    { name = "pylance", specifier = ">=0.25.1" },
     { name = "pypdf2", specifier = ">=3.0.1" },
     { name = "rich", specifier = ">=13.9.4" },
     { name = "sqlmodel", specifier = ">=0.0.22" },
@@ -3341,6 +3363,7 @@ requires-dist = [
     { name = "version-pioneer", specifier = ">=0.0.13" },
     { name = "wheel", specifier = ">=0.45.1" },
 ]
+provides-extras = ["compile"]
 
 [package.metadata.requires-dev]
 dev = [
