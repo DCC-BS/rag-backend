@@ -1,7 +1,14 @@
 ---
+description:
+globs: *.py
+alwaysApply: false
+---
+---
 description: Python Fast API
 globs: *.py
+alwaysApply: false
 ---
+
 You are an expert in Python project development, specializing in building well-structured, maintainable Python applications.
 
 Core Expertise:
@@ -10,6 +17,22 @@ Core Expertise:
 - Testing Strategies
 - Code Quality
 - Package Management
+
+We rely on this tech stack:
+- pytest for unittests
+- uv for dependency management
+- ruff for formatting
+- basedpyright for linting
+- github workflows for ci/cd
+- configuration through omegaconf yaml config files and environment variables
+- structlog for logging
+- docker container for deployment
+
+Execute python code, tests, ruff or linter:
+- Always use uv
+- To run python files: `uv run script.py`
+- To run tests: `uv run pytest`
+- To run pre-commit: `uv run pre-commit run --all`
 
 Development Guidelines:
 
@@ -31,7 +54,11 @@ NEVER:
 ALWAYS:
 - Use proper imports
 - Implement clean architecture
-- Follow SOLID principles
+- If writing object oriented code, follow SOLID principles
+- SOLID means: Single-responsibility, open-closed principle, liskov substition principle, interface segregation principle and dependency inversion principle.
+- Always follow DRY (do not repeat yourself)
+- Always follow KISS (keep it simple, stupid)
+- Test your code
 - Use type hints
 - Document code properly
 
@@ -43,17 +70,11 @@ NEVER:
 
 3. Dependency Management
 ALWAYS:
-- Use virtual environments
+- Use uv to manage virtual environments
 - Pin dependencies
-- Use requirements files
+- Use `uv add` to add new requirements
 - Handle dev dependencies
 - Update regularly
-
-NEVER:
-- Mix environment dependencies
-- Use global packages
-- Skip version pinning
-- Ignore security updates
 
 4. Testing Strategy
 ALWAYS:
@@ -69,12 +90,17 @@ NEVER:
 - Ignore test isolation
 - Skip error scenarios
 
+5. Type hints:
+- Annotate all functions and methods with typehints
+- Do not use Optional, List, Str, Dict. Instead use list, str dict or "type | None" for Optional types
+- Use collections.abc Iterator and not typing Iterator
+- Avoid the use of Any type unless there is a good reasoning
+- For structlog use this type annotation: structlog.stdlib.BoundLogger
+
 Code Quality:
 - Use proper linting
 - Implement formatting
 - Follow style guides
-- Use static analysis
-- Monitor complexity
 
 Documentation:
 - Write clear docstrings
@@ -83,26 +109,11 @@ Documentation:
 - Include examples
 - Keep docs updated
 
-Development Tools:
-- Use proper IDE
-- Configure debugger
-- Use version control
-- Implement CI/CD
-- Use code analysis
-
 Best Practices:
 - Follow PEP standards
 - Keep code clean
 - Handle errors properly
-- Use proper logging
-- Implement monitoring
-
-Package Distribution:
-- Use proper packaging
-- Handle versioning
-- Write setup files
-- Include metadata
-- Document installation
+- Use structlogger logging
 
 Remember:
 - Focus on maintainability
