@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
-from omegaconf import OmegaConf
+from omegaconf import MISSING, OmegaConf
 
 
 @dataclass
@@ -66,8 +67,19 @@ class LoginCookieConfig:
 
 
 @dataclass
+class DataSource:
+    name: str
+    path: str
+
+
+@dataclass
+class Credentials:
+    usernames: dict[str, LoginCredentials]
+
+
+@dataclass
 class LoginConfig:
-    credentials: dict[str, dict[str, LoginCredentials]]
+    credentials: Credentials
     cookie: LoginCookieConfig
 
 
@@ -84,8 +96,8 @@ class AppConfig:
     CHAT: ChatConfig
     ROLES: list[str]
     DATA_DIR: str
-    DOC_SOURCES: dict[str, str]
     LOGIN_CONFIG: LoginConfig
+    DOC_SOURCES: dict[str, str] = MISSING
 
 
 class ConfigurationManager:
@@ -97,34 +109,66 @@ class ConfigurationManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    @staticmethod
+    def _raise_config_type_error(config_obj: object) -> NoReturn:
+        """Raise a TypeError when config object is of wrong type."""
+        raise TypeError("Failed to load configuration with correct type")
+
+    @staticmethod
+    def _raise_config_load_error(conf_file: Path, err: Exception) -> NoReturn:
+        """Raise a ValueError when config file loading fails."""
+        raise ValueError(f"Error loading config from {conf_file}") from err
+
+    @staticmethod
+    def _raise_config_validation_error(err: Exception) -> NoReturn:
+        """Raise a ValueError when config validation fails."""
+        raise ValueError("Configuration validation failed") from err
+
     @classmethod
     def _load_config(cls) -> AppConfig:
         """Loads and merges configuration files using OmegaConf."""
         if cls._config is None:
             OmegaConf.clear_resolvers()
 
-            # Create base config with schema
-            schema = OmegaConf.structured(AppConfig)  # pyright: ignore[reportAny]
+            # Create base config with schema and set to strict mode
+            schema = OmegaConf.structured(AppConfig)
+
+            # Create empty config
             config = OmegaConf.create()
 
             # Recursively find all yaml files in conf directory
             conf_dir = Path("src/rag/conf")
             yaml_files = sorted([f for f in conf_dir.rglob("*.yaml") if f.is_file()], key=lambda x: x.as_posix())
 
-            # Merge all configs with schema validation
+            if not yaml_files:
+                raise ValueError(f"No configuration files found in {conf_dir}")
+
+            # Merge all configs
             for conf_file in yaml_files:
                 try:
-                    file_conf = OmegaConf.load(file_=conf_file)
+                    with open(conf_file, encoding="utf-8") as f:
+                        file_conf = OmegaConf.load(f)
                     config = OmegaConf.merge(config, file_conf)
-                except Exception as e:
-                    print(f"Error loading config from {conf_file}: {e}")
+                except Exception as err:
+                    cls._raise_config_load_error(conf_file, err)
 
-            # Merge schema with loaded config and convert to object
-            merged_config = OmegaConf.merge(schema, config)  # pyright: ignore[reportAny]
-            config_obj = OmegaConf.to_object(merged_config)
-            if not isinstance(config_obj, AppConfig):
-                raise ValueError("Failed to load configuration with correct type")
-            cls._config = config_obj
+            try:
+                # Merge schema with loaded config
+                merged_config = OmegaConf.merge(schema, config)
+
+                # Set struct mode after merging to allow dynamic dictionary keys
+                OmegaConf.set_struct(merged_config, True)
+
+                # Additional validation to ensure all required fields are present
+                OmegaConf.resolve(merged_config)
+
+                # Convert to object with validation
+                config_obj = OmegaConf.to_object(merged_config)
+                if not isinstance(config_obj, AppConfig):
+                    cls._raise_config_type_error(config_obj)
+                cls._config = config_obj
+            except Exception as err:
+                cls._raise_config_validation_error(err)
 
         return cls._config
 
@@ -137,7 +181,8 @@ class ConfigurationManager:
             AppConfig: The loaded configuration with strong typing.
 
         Raises:
-            ValueError: If configuration has not been loaded yet.
+            ValueError: If configuration has not been loaded yet or validation fails.
+            TypeError: If configuration object is of wrong type.
         """
         if cls._config is None:
             return cls._load_config()

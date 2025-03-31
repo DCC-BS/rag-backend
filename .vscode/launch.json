@@ -2,6 +2,17 @@
   "configurations": [
     {
       "args": [
+        "${file}"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "module": "pytest",
+      "name": "Python Debugger: Pytest Current File (uv env)",
+      "request": "launch",
+      "type": "debugpy"
+    },
+    {
+      "args": [
         "main:app",
         "--reload",
         "--port",

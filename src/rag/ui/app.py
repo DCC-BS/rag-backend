@@ -1,5 +1,6 @@
 import sys
 import uuid
+from dataclasses import asdict
 
 import streamlit as st
 import streamlit_authenticator as stauth
@@ -41,7 +42,7 @@ st.set_page_config(
     menu_items=None,
 )
 authenticator = stauth.Authenticate(
-    credentials=config.LOGIN_CONFIG.credentials,
+    credentials=asdict(config.LOGIN_CONFIG.credentials),
     cookie_name=config.LOGIN_CONFIG.cookie.name,
     cookie_key=config.LOGIN_CONFIG.cookie.key,
     cookie_expiry_days=config.LOGIN_CONFIG.cookie.expiry_days,

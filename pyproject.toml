@@ -36,6 +36,9 @@ dependencies = [
     "pylance>=0.25.1",
 ]
 
+[project.scripts]
+rag-ui = "rag.ui.cli:run_app"
+
 [project.urls]
 Homepage = "https://DCC-BS.github.io/rag-application/"
 Repository = "https://github.com/DCC-BS/rag-application"
@@ -163,7 +166,8 @@ ignore = [
     "E501",
     # DoNotAssignLambda
     "E731",
-    "TRY003"
+    "TRY003",
+    "S603"
 ]
 
 [tool.ruff.lint.per-file-ignores]
