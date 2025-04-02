@@ -40,14 +40,11 @@ class TestBentoEmbeddingsIntegration:
         texts = ["This is a test document.", "Another test document."]
         embeddings = bento_embeddings.embed_documents(texts)
 
-        # Check that we got the right number of embeddings
         assert len(embeddings) == len(texts)
 
-        # Check that embeddings are lists of floats
         assert all(isinstance(emb, list) for emb in embeddings)
         assert all(isinstance(val, float) for emb in embeddings for val in emb)
 
-        # Check that all embeddings have the same dimension
         embedding_dim = len(embeddings[0])
         assert all(len(emb) == embedding_dim for emb in embeddings)
 
@@ -56,7 +53,6 @@ class TestBentoEmbeddingsIntegration:
         text = "This is a test query."
         embedding = bento_embeddings.embed_query(text)
 
-        # Check that embedding is a list of floats
         assert isinstance(embedding, list)
         assert all(isinstance(val, float) for val in embedding)
 
@@ -66,14 +62,11 @@ class TestBentoEmbeddingsIntegration:
         texts = ["This is a test document.", "Another test document."]
         embeddings = await bento_embeddings.aembed_documents(texts)
 
-        # Check that we got the right number of embeddings
         assert len(embeddings) == len(texts)
 
-        # Check that embeddings are lists of floats
         assert all(isinstance(emb, list) for emb in embeddings)
         assert all(isinstance(val, float) for emb in embeddings for val in emb)
 
-        # Check that all embeddings have the same dimension
         embedding_dim = len(embeddings[0])
         assert all(len(emb) == embedding_dim for emb in embeddings)
 
@@ -83,6 +76,5 @@ class TestBentoEmbeddingsIntegration:
         text = "This is a test query."
         embedding = await bento_embeddings.aembed_query(text)
 
-        # Check that embedding is a list of floats
         assert isinstance(embedding, list)
         assert all(isinstance(val, float) for val in embedding)

@@ -1,7 +1,7 @@
 import asyncio
 import re
 from collections.abc import AsyncIterator, Callable, Iterator
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -27,16 +27,29 @@ from rag.core.rag_states import (
     RAGState,
     RouteQuery,
 )
-from rag.data.document_storage import get_lancedb_doc_store
+from rag.documents.document_storage import get_lancedb_doc_store
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.stream_response import StreamResponse
 
 
+class RetrieverProtocol(Protocol):
+    def invoke(self, **kwargs: Any) -> list[Document]:
+        """Invoke the retriever with any parameters and return a list of documents."""
+        ...
+
+
 class SHRAGPipeline:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        llm: ChatOpenAI | None = None,
+        query_rewriter_llm: ChatOpenAI | None = None,
+        retriever: RetrieverProtocol | None = None,
+        memory: MemorySaver | None = None,
+        system_prompt: str | None = None,
+    ) -> None:
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.config: AppConfig = ConfigurationManager.get_config()
-        self.system_prompt: str = (
+        self.system_prompt: str = system_prompt or (
             "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
             "You are given a question and a context of documents that are relevant to the question. "
             "You are to answer the question based on the context and the conversation history. "
@@ -49,16 +62,16 @@ class SHRAGPipeline:
         )
 
         # Setup components
-        self.retriever: LanceDBRetriever = self._setup_retriever()
-        self.llm: ChatOpenAI = self._setup_llm()
-        self.query_rewriter_llm: ChatOpenAI = self._setup_llm(temperature=0.8)
+        self.retriever: RetrieverProtocol = retriever or self._setup_retriever()
+        self.llm: ChatOpenAI = llm or self._setup_llm()
+        self.query_rewriter_llm: ChatOpenAI = query_rewriter_llm or self._setup_llm(temperature=0.8)
         self.structured_llm_router = self.llm.with_structured_output(schema=RouteQuery, method="json_schema")
         self.structured_llm_grade_documents = self.llm.with_structured_output(GradeDocuments, method="json_schema")
         self.structured_llm_grade_hallucination = self.llm.with_structured_output(
             GradeHallucination, method="json_schema"
         )
         self.structured_llm_grade_answer = self.llm.with_structured_output(GradeAnswer, method="json_schema")
-        self.memory: MemorySaver = MemorySaver()
+        self.memory: MemorySaver = memory or MemorySaver()
 
         # Setup update handlers
         self.update_handlers: dict[str, Callable[[dict[str, Any]], StreamResponse]] = {
@@ -91,8 +104,12 @@ class SHRAGPipeline:
             ),
         }
 
-        # Create graph
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> CompiledStateGraph:
+        """Create and compile the state graph."""
         workflow: StateGraph = StateGraph(state_schema=RAGState, input=InputState, output=OutputState)
+
         # Add nodes
         _ = workflow.add_node("route_question", self.route_question)
         _ = workflow.add_node("retrieve", self.retrieve)
@@ -113,8 +130,13 @@ class SHRAGPipeline:
         _ = workflow.add_edge(start_key="grade_hallucination", end_key="grade_answer")
 
         # Compile graph
-        self.graph: CompiledStateGraph = workflow.compile(checkpointer=self.memory)
-        _ = self.graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
+        compiled_graph = workflow.compile(checkpointer=self.memory)
+        try:
+            _ = compiled_graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
+        except Exception as e:
+            self.logger.info(f"Could not draw graph: {e}")
+
+        return compiled_graph
 
     def retrieve(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         docs: list[Document] = self.retriever.invoke(
@@ -399,7 +421,16 @@ class SHRAGPipeline:
             "requires_more_information": False,
         }
 
-    async def generate_answer(self, state: RAGState, config: RunnableConfig):
+    def generate_answer(self, state: RAGState, config: RunnableConfig):
+        """Generate an answer based on the context and question.
+
+        Args:
+            state: The current graph state
+            config: The configuration for the graph
+
+        Returns:
+            dict: The answer and updated messages
+        """
         if not state["messages"]:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
@@ -413,9 +444,9 @@ class SHRAGPipeline:
         template = ChatPromptTemplate([
             ("user", "Context: {context}\n\nQuestion: {input}"),
         ])
-        prompt = await template.ainvoke({"context": context, "input": state["input"]}, config)
+        prompt = template.invoke({"context": context, "input": state["input"]}, config)
         messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())
-        response = await self.llm.ainvoke(messages, config)
+        response = self.llm.invoke(messages, config)
         return {"messages": [*messages, response], "answer": response.content}
 
     def _setup_retriever(self):
