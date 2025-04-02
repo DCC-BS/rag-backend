@@ -122,7 +122,13 @@ class ConfigurationManager:
     @staticmethod
     def _raise_config_validation_error(err: Exception) -> NoReturn:
         """Raise a ValueError when config validation fails."""
-        raise ValueError("Configuration validation failed") from err
+        error_msg = str(err).lower()
+        if "missing" in error_msg:
+            raise ValueError(f"Configuration validation failed: missing required fields - {err}")
+        elif any(term in error_msg for term in ["type", "expected"]):
+            raise ValueError(f"Configuration validation failed: type validation error - {err}")
+        else:
+            raise ValueError(f"Configuration validation failed: {err}")
 
     @classmethod
     def _load_config(cls) -> AppConfig:

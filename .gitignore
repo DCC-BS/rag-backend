@@ -1,12 +1,11 @@
-data
-!src/rag/data
+data/
+feedback.csv
 __pychache__
 lancedb
 ./src/rag/conf/local/users.yaml
 __pycache__/
 *.log
 .ruff_cache
-./src/rag/feedback.csv
 ./src/rag/logs/
 ./src/rag/database.db
 

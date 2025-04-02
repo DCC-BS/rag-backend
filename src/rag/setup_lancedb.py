@@ -3,7 +3,7 @@ from pathlib import Path
 
 import structlog
 
-from rag.data.document_storage import create_lancedb_document_store
+from rag.documents.document_storage import create_lancedb_document_store
 from rag.utils.config import AppConfig, ConfigurationManager
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()

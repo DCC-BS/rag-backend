@@ -1,1 +1,1 @@
-"""Unit tests for sh-rag-chat."""
+"""Unit tests for the rag package."""
