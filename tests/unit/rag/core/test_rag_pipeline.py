@@ -8,7 +8,7 @@ from langchain.schema import Document
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import Command
+from langgraph.types import Command, Interrupt
 
 from rag.core.rag_pipeline import RetrieverProtocol, SHRAGPipeline
 from tests.unit.rag.core.test_mocks import MockRAGState
@@ -370,3 +370,256 @@ def test_generate_answer(pipeline):
         assert result["answer"] == "Generated answer"
         assert "messages" in result
         assert isinstance(result["messages"], list)
+
+
+def test_user_review_rewritten_query_needs_information(pipeline):
+    """Test user review of rewritten query when more information is needed."""
+    mock_state = cast(MockRAGState, cast(object, {"input": "rewritten query", "requires_more_information": True}))
+    mock_config = RunnableConfig()
+
+    with patch("rag.core.rag_pipeline.interrupt") as mock_interrupt:
+        mock_interrupt.return_value = {"action": "provide_information", "data": "updated query"}
+
+        result = pipeline.user_review_rewritten_query(mock_state, mock_config)
+
+        mock_interrupt.assert_called_once_with(
+            value={
+                "type": "needs_information",
+                "question": "Um die Frage zu beantworten, benötige ich weitere Informationen. Bitte geben Sie eine detailliertere Frage ein.",
+                "rewritten_query": "rewritten query",
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.goto == "transform_query"
+        assert result.update == {"input": "updated query"}
+
+
+def test_user_review_rewritten_query_needs_approval_accept(pipeline):
+    """Test user review of rewritten query when approval is needed and user accepts."""
+    mock_state = cast(MockRAGState, cast(object, {"input": "rewritten query", "requires_more_information": False}))
+    mock_config = RunnableConfig()
+
+    with patch("rag.core.rag_pipeline.interrupt") as mock_interrupt:
+        mock_interrupt.return_value = {"action": "accept"}
+
+        result = pipeline.user_review_rewritten_query(mock_state, mock_config)
+
+        mock_interrupt.assert_called_once_with(
+            value={
+                "type": "needs_approval",
+                "question": "Ist die umgeformte Frage korrekt?",
+                "rewritten_query": "rewritten query",
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.goto == "retrieve"
+        assert result.update == {"input": "rewritten query"}
+
+
+def test_user_review_rewritten_query_needs_approval_modify(pipeline):
+    """Test user review of rewritten query when approval is needed and user modifies."""
+    mock_state = cast(MockRAGState, cast(object, {"input": "rewritten query", "requires_more_information": False}))
+    mock_config = RunnableConfig()
+
+    with patch("rag.core.rag_pipeline.interrupt") as mock_interrupt:
+        mock_interrupt.return_value = {"action": "modify", "data": "modified query"}
+
+        result = pipeline.user_review_rewritten_query(mock_state, mock_config)
+
+        mock_interrupt.assert_called_once_with(
+            value={
+                "type": "needs_approval",
+                "question": "Ist die umgeformte Frage korrekt?",
+                "rewritten_query": "rewritten query",
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.goto == "retrieve"
+        assert result.update == {"input": "modified query"}
+
+
+def test_setup_retriever(pipeline):
+    """Test the _setup_retriever method."""
+    with (
+        patch("rag.core.rag_pipeline.get_lancedb_doc_store") as mock_get_docstore,
+        patch("rag.core.rag_pipeline.BentoMLReranker") as mock_reranker_class,
+        patch("rag.core.rag_pipeline.LanceDBRetriever") as mock_retriever_class,
+    ):
+        # Set up mocks
+        mock_table = MagicMock()
+        mock_embeddings = MagicMock()
+        mock_vector_store = MagicMock()
+        mock_vector_store.embeddings = mock_embeddings
+        mock_vector_store._text_key = "text"
+        mock_vector_store._vector_key = "vector"
+        mock_vector_store.get_table.return_value = mock_table
+
+        mock_get_docstore.return_value = mock_vector_store
+
+        mock_reranker = MagicMock()
+        mock_reranker_class.return_value = mock_reranker
+
+        mock_retriever = MagicMock()
+        mock_retriever_class.return_value = mock_retriever
+
+        # Configure pipeline
+        pipeline.config.DOC_STORE.TABLE_NAME = "test_table"
+        pipeline.config.EMBEDDINGS.API_URL = "http://test-url"
+        pipeline.config.RETRIEVER.TOP_K = 5
+        pipeline.config.RETRIEVER.FETCH_FOR_RERANKING = 10
+
+        # Call the method
+        result = pipeline._setup_retriever()
+
+        # Assert the mocks were called correctly
+        mock_get_docstore.assert_called_once()
+        mock_reranker_class.assert_called_once_with(api_url="http://test-url", column="text")
+        mock_retriever_class.assert_called_once()
+
+        # Check the arguments to LanceDBRetriever
+        _, kwargs = mock_retriever_class.call_args
+        assert kwargs["table"] == mock_table
+        assert kwargs["embeddings"] == mock_embeddings
+        assert kwargs["reranker"] == mock_reranker
+        assert kwargs["config"].vector_col == "vector"
+        assert kwargs["config"].fts_col == "text"
+        assert kwargs["config"].k == 5
+        assert kwargs["config"].docs_before_rerank == 10
+
+        # Check the result
+        assert result == mock_retriever
+
+
+@pytest.mark.asyncio
+async def test_astream_query_new_query(pipeline):
+    """Test astream_query for a new query."""
+    mock_stream_response = MagicMock()
+    pipeline.update_handlers = {
+        "retrieve": lambda data: mock_stream_response,
+        "generate_answer": lambda data: mock_stream_response,
+    }
+
+    mock_data = [
+        ("updates", {"retrieve": {"context": []}}),
+        ("updates", {"generate_answer": {"answer": "test answer"}}),
+    ]
+
+    async def mock_async_stream_generator():
+        for item in mock_data:
+            yield item
+
+    mock_graph = MagicMock()
+    async_generator_instance = mock_async_stream_generator()
+    mock_graph.astream = MagicMock(return_value=async_generator_instance)
+
+    pipeline.graph = mock_graph
+
+    # Call the method
+    responses = []
+    async for response in pipeline.astream_query(
+        question="test question", user_organization="test org", thread_id="test-thread"
+    ):
+        responses.append(response)
+
+    # Assert the mocks were called correctly
+    assert mock_graph.astream.called
+    assert len(responses) == 2
+    assert all(response == mock_stream_response for response in responses)
+
+    # Check the call arguments
+    args, kwargs = mock_graph.astream.call_args
+    assert kwargs["input"] == {"input": "test question", "user_organization": "test org"}
+    assert kwargs["stream_mode"] == ["updates"]
+    assert kwargs["config"]["configurable"]["thread_id"] == "test-thread"
+
+
+@pytest.mark.asyncio
+async def test_astream_query_resume(pipeline):
+    """Test astream_query for resuming an interaction."""
+    # Set up mocks
+    mock_stream_response = MagicMock()
+    pipeline.update_handlers = {"retrieve": lambda data: mock_stream_response}
+
+    # Create an async iterator of the data we want to yield
+    mock_data = [
+        ("updates", {"retrieve": {"context": []}}),
+    ]
+
+    async def mock_async_stream_generator():
+        for item in mock_data:
+            yield item
+
+    mock_graph = MagicMock()
+    async_generator_instance = mock_async_stream_generator()
+    mock_graph.astream = MagicMock(return_value=async_generator_instance)
+
+    pipeline.graph = mock_graph
+
+    # Call the method
+    responses = []
+    async for response in pipeline.astream_query(
+        thread_id="test-thread", resume_action="accept", resume_data="modified data"
+    ):
+        responses.append(response)
+
+    # Assert the mocks were called correctly
+    assert mock_graph.astream.called
+    assert len(responses) == 1
+    assert responses[0] == mock_stream_response
+
+    # Check the call arguments
+    args, kwargs = mock_graph.astream.call_args
+    assert isinstance(kwargs["input"], Command)
+    assert kwargs["input"].resume == {"action": "accept", "data": "modified data"}
+    assert kwargs["stream_mode"] == ["updates"]
+    assert kwargs["config"]["configurable"]["thread_id"] == "test-thread"
+
+
+@pytest.mark.asyncio
+async def test_astream_query_with_interrupt(pipeline):
+    """Test astream_query with an interruption."""
+    mock_stream_response = MagicMock()
+    mock_interrupt_response = MagicMock()
+
+    pipeline.update_handlers = {"retrieve": lambda data: mock_stream_response}
+
+    interrupt_value = {"question": "Is this correct?", "rewritten_query": "rewritten query", "type": "needs_approval"}
+    interrupt_obj = Interrupt(value=interrupt_value)
+
+    # Create an async iterator of the data we want to yield
+    mock_data = [
+        ("updates", {"retrieve": {"context": []}}),
+        ("updates", {"__interrupt__": [interrupt_obj]}),
+    ]
+
+    async def mock_async_stream_generator():
+        for item in mock_data:
+            yield item
+
+    mock_graph = MagicMock()
+    async_generator_instance = mock_async_stream_generator()
+    mock_graph.astream = MagicMock(return_value=async_generator_instance)
+
+    pipeline.graph = mock_graph
+
+    with patch.object(pipeline, "update_handlers") as mock_handlers:
+        mock_handlers.__getitem__.side_effect = lambda key: (
+            lambda data: mock_interrupt_response if key == "__interrupt__" else mock_stream_response
+        )
+        with patch("rag.utils.stream_response.StreamResponse.create_interrupt_response") as mock_create_interrupt:
+            mock_create_interrupt.return_value = mock_interrupt_response
+
+            # Call the method
+            responses = []
+            async for response in pipeline.astream_query(
+                question="test question", user_organization="test org", thread_id="test-thread"
+            ):
+                responses.append(response)
+
+            # Check interrupt handling
+            mock_create_interrupt.assert_called_once_with(
+                message="Benutzerinteraktion erforderlich", interrupt_data=interrupt_value
+            )

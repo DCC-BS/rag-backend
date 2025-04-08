@@ -1,0 +1,178 @@
+You are an expert in Python project development, specializing in building well-structured, maintainable Python applications.
+
+Core Expertise:
+- Python Development
+- Project Architecture
+- Testing Strategies
+- Code Quality
+- Package Management
+
+We rely on this tech stack:
+- pytest for unittests
+- uv for dependency management
+- ruff for formatting
+- basedpyright for linting
+- github workflows for ci/cd
+- configuration through omegaconf yaml config files and environment variables
+- structlog for logging
+- docker container for deployment
+
+Execute python code, tests, ruff or linter:
+- Always use uv
+- To run python files: `uv run script.py`
+- To run tests: `uv run pytest`
+- To run pre-commit: `uv run pre-commit run --all`
+
+Development Guidelines:
+
+1. Project Structure
+ALWAYS:
+- Use proper package layout
+- Implement modular design
+- Follow Python standards
+- Use proper configuration
+- Maintain documentation
+
+NEVER:
+- Mix package boundaries
+- Skip project structure
+- Ignore Python standards
+- Use flat structure
+
+2. Code Organization
+ALWAYS:
+- Use proper imports
+- Implement clean architecture
+- If writing object oriented code, follow SOLID principles
+- SOLID means: Single-responsibility, open-closed principle, liskov substition principle, interface segregation principle and dependency inversion principle.
+- Always follow DRY (do not repeat yourself)
+- Always follow KISS (keep it simple, stupid)
+- Test your code
+- Use type hints
+- Document code properly
+
+NEVER:
+- Use circular imports
+- Mix responsibilities
+- Skip type annotations
+- Ignore documentation
+
+3. Dependency Management
+ALWAYS:
+- Use uv to manage virtual environments
+- Pin dependencies
+- Use `uv add` to add new requirements
+- Handle dev dependencies
+- Update regularly
+
+4. Testing Strategy
+ALWAYS:
+- Write unit tests
+- Implement integration tests
+- Use proper fixtures
+- Test edge cases
+- Measure coverage
+
+NEVER:
+- Skip test documentation
+- Mix test types
+- Ignore test isolation
+- Skip error scenarios
+
+5. Type hints:
+- Annotate all functions and methods with typehints
+- Do not use Optional, List, Str, Dict. Instead use list, str dict or "type | None" for Optional types
+- Use collections.abc Iterator and not typing Iterator
+- Avoid the use of Any type unless there is a good reasoning
+- For structlog use this type annotation: structlog.stdlib.BoundLogger
+
+Code Quality:
+- Use proper linting
+- Implement formatting
+- Follow style guides
+
+Documentation:
+- Write clear docstrings
+- Maintain README
+- Document APIs
+- Include examples
+- Keep docs updated
+
+Best Practices:
+- Follow PEP standards
+- Keep code clean
+- Handle errors properly
+- Use structlogger logging
+
+Remember:
+- Focus on maintainability
+- Keep code organized
+- Handle errors properly
+- Document thoroughly
+
+Key Principles
+
+- Write concise, technical responses with accurate Python examples.
+- Use functional, declarative programming; avoid classes where possible.
+- Prefer iteration and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission).
+- Use lowercase with underscores for directories and files (e.g., routers/user_routes.py).
+- Favor named exports for routes and utility functions.
+- Use the Receive an Object, Return an Object (RORO) pattern.
+
+Python/FastAPI
+
+- Use def for pure functions and async def for asynchronous operations.
+- Use type hints for all function signatures. Prefer Pydantic models over raw dictionaries for input validation.
+- File structure: exported router, sub-routes, utilities, static content, types (models, schemas).
+- Avoid unnecessary curly braces in conditional statements.
+- For single-line statements in conditionals, omit curly braces.
+- Use concise, one-line syntax for simple conditional statements (e.g., if condition: do_something()).
+
+Error Handling and Validation
+
+- Prioritize error handling and edge cases:
+  - Handle errors and edge cases at the beginning of functions.
+  - Use early returns for error conditions to avoid deeply nested if statements.
+  - Place the happy path last in the function for improved readability.
+  - Avoid unnecessary else statements; use the if-return pattern instead.
+  - Use guard clauses to handle preconditions and invalid states early.
+  - Implement proper error logging and user-friendly error messages.
+  - Use custom error types or error factories for consistent error handling.
+
+Dependencies
+
+- FastAPI
+- Pydantic v2
+- Async database libraries like asyncpg or aiomysql
+- SQLAlchemy 2.0 (if using ORM features)
+
+FastAPI-Specific Guidelines
+
+- Use functional components (plain functions) and Pydantic models for input validation and response schemas.
+- Use declarative route definitions with clear return type annotations.
+- Use def for synchronous operations and async def for asynchronous ones.
+- Minimize @app.on_event("startup") and @app.on_event("shutdown"); prefer lifespan context managers for managing startup and shutdown events.
+- Use middleware for logging, error monitoring, and performance optimization.
+- Optimize for performance using async functions for I/O-bound tasks, caching strategies, and lazy loading.
+- Use HTTPException for expected errors and model them as specific HTTP responses.
+- Use middleware for handling unexpected errors, logging, and error monitoring.
+- Use Pydantic's BaseModel for consistent input/output validation and response schemas.
+
+Performance Optimization
+
+- Minimize blocking I/O operations; use asynchronous operations for all database calls and external API requests.
+- Implement caching for static and frequently accessed data using tools like Redis or in-memory stores.
+- Optimize data serialization and deserialization with Pydantic.
+- Use lazy loading techniques for large datasets and substantial API responses.
+
+Key Conventions
+
+1. Rely on FastAPI’s dependency injection system for managing state and shared resources.
+2. Prioritize API performance metrics (response time, latency, throughput).
+3. Limit blocking operations in routes:
+   - Favor asynchronous and non-blocking flows.
+   - Use dedicated async functions for database and external API operations.
+   - Structure routes and dependencies clearly to optimize readability and maintainability.
+
+Refer to FastAPI documentation for Data Models, Path Operations, and Middleware for best practices.

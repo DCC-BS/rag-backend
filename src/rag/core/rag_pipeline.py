@@ -537,22 +537,23 @@ class SHRAGPipeline:
         """Synchronous wrapper around astream_query"""
         self.logger.info(f"Thread ID: {thread_id}")
 
-        async def run_async():
-            async for chunk in self.astream_query(question=question, user_organization=user_role, thread_id=thread_id):
-                yield chunk
-
-        # Create and run event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            agen = run_async()
-            while True:
-                try:
-                    yield loop.run_until_complete(agen.__anext__())
-                except StopAsyncIteration:
-                    break
+            # Collect all responses in a list
+            coro = self._collect_async_responses(question=question, user_organization=user_role, thread_id=thread_id)
+            responses = loop.run_until_complete(coro)
+            # Yield them one by one
+            yield from responses
         finally:
             loop.close()
+
+    async def _collect_async_responses(self, **kwargs) -> list[StreamResponse]:
+        """Helper method to collect all responses from astream_query"""
+        responses = []
+        async for chunk in self.astream_query(**kwargs):
+            responses.append(chunk)
+        return responses
 
     def resume_query(self, thread_id: str, action: str, data: str | None = None) -> Iterator[StreamResponse]:
         """Resume a RAG pipeline execution after an interrupt.
