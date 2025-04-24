@@ -51,7 +51,7 @@ class GenerateAnswerAction(ActionProtocol):
         # Format context with document metadata for citations
         formatted_context: list[str] = []
         for doc in state["context"]:  # pyright: ignore[reportOptionalIterable]
-            formatted_context.append(f"Content: {doc.page_content}\nSource: {doc.metadata.get('filename', 'unknown')}")
+            formatted_context.append(f"Content: {doc.page_content}\nSource: {doc.metadata.get("filename", "unknown")}")
 
         context: str = "\n\n".join(formatted_context)
 

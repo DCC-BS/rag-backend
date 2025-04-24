@@ -72,5 +72,5 @@ class RouteQuestionAction(ActionProtocol):
         Handles updates from the action and returns a StreamResponse.
         """
         return StreamResponse.create_status(
-            message=f"{'Suche relevante Dokumente' if data.get('route_query') == 'retrieval' else 'Antworte auf die Frage'}",
+            message=f"{"Suche relevante Dokumente" if data.get("route_query") == "retrieval" else "Antworte auf die Frage"}",
         )
