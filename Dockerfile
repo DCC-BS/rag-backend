@@ -12,4 +12,4 @@ COPY . /app
 
 RUN uv sync --frozen
 
-CMD [ "python", "src/rag/main.py" ]
+CMD [ "uv", "run", "python", "src/rag/app.py" ]

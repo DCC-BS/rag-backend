@@ -1,0 +1,43 @@
+from typing import Any, Protocol
+
+import structlog
+from langchain.schema import Document
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph.state import StateDict
+
+from rag.actions.action_protocol import ActionProtocol
+from rag.models.stream_response import StreamResponse
+
+
+class RetrieverProtocol(Protocol):
+    def invoke(self, **kwargs: Any) -> list[Document]:
+        """Invoke the retriever with any parameters and return a list of documents."""
+        ...
+
+
+class RetrieveAction(ActionProtocol):
+    """
+    Action to retrieve relevant documents.
+    """
+
+    def __init__(self, retriever: RetrieverProtocol) -> None:
+        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.retriever = retriever
+
+    def __call__(self, state: StateDict, config: RunnableConfig) -> dict[str, list[Document]]:
+        self.logger.info("---RETRIEVE DOCUMENTS---")
+        docs: list[Document] = self.retriever.invoke(
+            input=state["input"],
+            user_organization=state["user_organization"],
+            config=config,
+        )
+
+        return {"context": docs}
+
+    def update_handler(self, data: dict[str, Any]) -> StreamResponse:
+        """
+        Handles updates from the action and returns a StreamResponse.
+        """
+        return StreamResponse.create_document_response(
+            message="Relevante Dokumente gefunden", docs=data.get("context", [])
+        )

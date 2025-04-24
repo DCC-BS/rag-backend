@@ -28,19 +28,11 @@ class OutputState(TypedDict):
     answer: str | None
     hallucination_score: Literal["yes", "no"] | None
     answer_score: Literal["yes", "no"] | None
-    needs_rephrase: bool | None
     route_query: RouteQuery | None
-    requires_more_information: bool | None
 
 
 class RAGState(InputState, OutputState):
     pass
-
-
-class GradeDocuments(BaseModel):
-    """Binary score for relevance check on retrieved documents."""
-
-    binary_score: Literal["yes", "no"] = Field(description="Documents are relevant to the question, 'yes' or 'no'")
 
 
 class GradeHallucination(BaseModel):

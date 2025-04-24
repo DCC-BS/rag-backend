@@ -7,7 +7,7 @@ __pycache__/
 *.log
 .ruff_cache
 ./src/rag/logs/
-./src/rag/database.db
+*.db
 
 docs/source
 

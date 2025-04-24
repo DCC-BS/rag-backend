@@ -10,7 +10,7 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from rag.models import User, get_session
+from rag.models.user import User, get_session
 
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "81e7ad176e1d9e40d3c467791f4b7b11b76700e9ad9f5e3d119f3537d11e4b46"
 ALGORITHM = "HS256"

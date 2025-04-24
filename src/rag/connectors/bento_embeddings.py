@@ -230,9 +230,12 @@ class BentoMLReranker(Reranker):
     def _rerank(self, query: str, result_set: pyarrow.Table) -> pyarrow.Table:
         if self.client.is_ready():
             documents = result_set[self.column].to_pylist()
-            ranks: dict[str, tuple[str, float, str]] = self.client.rerank(documents=documents, query=query)
-            scores: list[float | Any] = [score for _, score, _ in ranks.values()]
-            result_set = result_set.append_column("_relevance_score", pyarrow.array(scores, type=pyarrow.float32()))
+            if len(documents) > 0:
+                ranks: dict[str, tuple[str, float, str]] = self.client.rerank(documents=documents, query=query)
+                scores: list[float | Any] = [score for _, score, _ in ranks.values()]
+                result_set = result_set.append_column("_relevance_score", pyarrow.array(scores, type=pyarrow.float32()))
+            else:
+                result_set = result_set.append_column("_relevance_score", pyarrow.array([], type=pyarrow.float32()))
         return result_set
 
     def rerank_hybrid(self, query: str, vector_results: pyarrow.Table, fts_results: pyarrow.Table) -> pyarrow.Table:

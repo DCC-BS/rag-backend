@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 import structlog
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -19,21 +19,24 @@ from rag.auth import (
     create_access_token,
     get_current_user,
 )
-from rag.core.rag_pipeline import SHRAGPipeline
-from rag.models import User, create_db_and_tables, get_session
+from rag.models.user import User, create_db_and_tables, get_session
+from rag.services.rag_pipeline import SHRAGPipeline
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
-state: dict[str, SHRAGPipeline] = {}
 
 TOKEN_TYPE = os.environ.get("TOKEN_TYPE") or "bearer"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # pyright: ignore[reportUnusedParameter]
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     create_db_and_tables()
-    state["pipeline"] = SHRAGPipeline()
+    app.state.pipeline = SHRAGPipeline()
     yield
+
+
+def get_pipeline(request: Request) -> SHRAGPipeline:
+    return request.app.state.pipeline
 
 
 app: FastAPI = FastAPI(title="RAG API", lifespan=lifespan)
@@ -58,21 +61,18 @@ app.add_middleware(
 async def stream_query(
     question: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    pipeline: Annotated[SHRAGPipeline, Depends(get_pipeline)],
     thread_id: str = "default",
 ) -> StreamingResponse:
     async def event_generator() -> AsyncGenerator[str, Any]:
         try:
-            async for event in state["pipeline"].astream_query(
+            async for event in pipeline.astream_query(
                 question,
                 current_user.organization,
                 thread_id,
             ):
                 yield f"{event}\n"
 
-        except StopAsyncIteration as e:
-            # Handle the intentional generator stop with return value
-            if hasattr(e, "value"):
-                yield f"{e.value}\n"  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
         except Exception as e:
             logger.error(
                 "Error processing stream query",

@@ -4,8 +4,8 @@ from langchain_core.documents.base import Document
 
 import lancedb
 from lancedb.db import DBConnection
-from rag.core.bento_embeddings import BentoEmbeddings
-from rag.documents.docling_loader import DoclingLoader
+from rag.connectors.bento_embeddings import BentoEmbeddings
+from rag.connectors.docling_loader import DoclingLoader
 from rag.utils.config import AppConfig, ConfigurationManager
 
 config: AppConfig = ConfigurationManager().get_config()
