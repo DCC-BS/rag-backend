@@ -8,9 +8,8 @@ from typing import (
 import bentoml
 import numpy as np
 import pyarrow
-from langchain_core.embeddings import Embeddings
-
 from lancedb.rerankers import Reranker
+from langchain_core.embeddings import Embeddings
 
 
 class BentoClientProtocol(Protocol):

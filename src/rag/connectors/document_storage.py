@@ -1,9 +1,9 @@
+import lancedb
+from lancedb.db import DBConnection
 from langchain_community.document_loaders.directory import DirectoryLoader
 from langchain_community.vectorstores.lancedb import LanceDB
 from langchain_core.documents.base import Document
 
-import lancedb
-from lancedb.db import DBConnection
 from rag.connectors.bento_embeddings import BentoEmbeddings
 from rag.connectors.docling_loader import DoclingLoader
 from rag.utils.config import AppConfig, ConfigurationManager

@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 from typing import Any, override
 
+from lancedb.rerankers import Reranker
+from lancedb.table import Table
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.schema import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
-
-from lancedb.rerankers import Reranker
-from lancedb.table import Table
 
 
 @dataclass
