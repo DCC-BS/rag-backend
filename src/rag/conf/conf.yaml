@@ -17,7 +17,7 @@ RETRIEVER:
 EMBEDDINGS:
   API_URL: "http://localhost:50001"
 LLM:
-  MODEL: "ISTA-DASLab/Mistral-Small-3.1-24B-Instruct-2503-GPTQ-4b-128g" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
+  MODEL: "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   API_URL: "http://localhost:8000/v1"
   TEMPERATURE: 0.1
   MAX_TOKENS: 3000

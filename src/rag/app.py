@@ -8,6 +8,7 @@ import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from rag.auth import get_current_user
 from rag.models.user import User
@@ -54,19 +55,23 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]
     return current_user
 
 
+class ChatMessage(BaseModel):
+    message: str
+    thread_id: str = "default"
+
+
 @app.post("/chat")
 async def chat(
-    question: str,
+    chat_message: ChatMessage,
     current_user: Annotated[User, Depends(get_current_user)],
     pipeline: Annotated[SHRAGPipeline, Depends(get_pipeline)],
-    thread_id: str = "default",
 ) -> StreamingResponse:
     async def event_generator() -> AsyncGenerator[str, Any]:
         try:
             async for event in pipeline.astream_query(
-                question,
+                chat_message.message,
                 current_user.organization,
-                thread_id,
+                chat_message.thread_id,
             ):
                 yield f"{event}\n"
 
@@ -75,8 +80,8 @@ async def chat(
                 "Error processing stream query",
                 extra={
                     "user": current_user.username,
-                    "thread_id": thread_id,
-                    "question": question,
+                    "thread_id": chat_message.thread_id,
+                    "message": chat_message.message,
                     "error": str(e),
                 },
                 exc_info=True,

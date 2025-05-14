@@ -152,7 +152,7 @@ class SHRAGPipeline:
 
     async def astream_query(
         self,
-        question: str | None = None,
+        message: str | None = None,
         user_organization: str | None = None,
         thread_id: str | None = None,
         resume_action: str | None = None,
@@ -165,9 +165,9 @@ class SHRAGPipeline:
                 raise ValueError("thread_id is required when resuming execution")
         else:
             # New query case
-            if question is None or user_organization is None or thread_id is None:
-                raise ValueError("question, user_organization, and thread_id are required for new queries")
-            user_input = {"input": question, "user_organization": user_organization}
+            if message is None or user_organization is None or thread_id is None:
+                raise ValueError("message, user_organization, and thread_id are required for new queries")
+            user_input = {"input": message, "user_organization": user_organization}
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
