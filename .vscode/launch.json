@@ -1,6 +1,13 @@
 {
   "configurations": [
     {
+      "console": "integratedTerminal",
+      "name": "Python Debugger: Current File",
+      "program": "${file}",
+      "request": "launch",
+      "type": "debugpy"
+    },
+    {
       "args": [
         "${file}"
       ],
@@ -8,23 +15,6 @@
       "justMyCode": true,
       "module": "pytest",
       "name": "Python Debugger: Pytest Current File (uv env)",
-      "request": "launch",
-      "type": "debugpy"
-    },
-    {
-      "args": [
-        "main:app",
-        "--reload",
-        "--port",
-        "8080"
-      ],
-      "cwd": "${workspaceFolder}/api",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}${pathSeparator}api${env:PYTHONPATH}"
-      },
-      "jinja": true,
-      "module": "uvicorn",
-      "name": "Python Debugger: FastAPI",
       "request": "launch",
       "type": "debugpy"
     },

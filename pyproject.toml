@@ -34,6 +34,8 @@ dependencies = [
     "structlog>=25.1.0",
     "version-pioneer>=0.0.13",
     "pylance>=0.25.1",
+    "python-jose[cryptography]>=3.4.0",
+    "cachetools>=5.5.2",
 ]
 
 [project.scripts]

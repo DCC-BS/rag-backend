@@ -1,8 +1,8 @@
 from typing import Any, Protocol
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph.state import StateDict
 
+from rag.models.rag_states import RAGState
 from rag.models.stream_response import StreamResponse
 
 
@@ -11,7 +11,7 @@ class ActionProtocol(Protocol):
     Protocol for RAG actions.
     """
 
-    def __call__(self, state: StateDict, config: RunnableConfig) -> Any:
+    def __call__(self, state: RAGState, config: RunnableConfig) -> Any:
         """
         Executes the action.
 

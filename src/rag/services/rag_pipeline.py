@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import structlog
 from langchain_core.runnables import RunnableConfig
@@ -41,15 +42,24 @@ class SHRAGPipeline:
         self.llm: ChatOpenAI = llm or self._setup_llm()
 
         # Instantiate actions
-        self.route_question_action = RouteQuestionAction(llm=self.llm)
-        self.retrieve_action = RetrieveAction(retriever=self.retriever)
-        self.grade_hallucination_action = GradeHallucinationAction(llm=self.llm)
-        self.grade_answer_action = GradeAnswerAction(llm=self.llm)
-        self.generate_answer_action = GenerateAnswerAction(llm=self.llm)
+        self.route_question_action: RouteQuestionAction = RouteQuestionAction(llm=self.llm)
+        self.retrieve_action: RetrieveAction = RetrieveAction(retriever=self.retriever)
+        self.grade_hallucination_action: GradeHallucinationAction = GradeHallucinationAction(llm=self.llm)
+        self.grade_answer_action: GradeAnswerAction = GradeAnswerAction(llm=self.llm)
+        self.generate_answer_action: GenerateAnswerAction = GenerateAnswerAction(llm=self.llm)
+
+        # Map node names to their update handlers
+        self.update_handlers: dict[str, Callable[[dict[str, Any]], StreamResponse]] = {
+            "route_question": self.route_question_action.update_handler,
+            "retrieve": self.retrieve_action.update_handler,
+            "grade_hallucination": self.grade_hallucination_action.update_handler,
+            "grade_answer": self.grade_answer_action.update_handler,
+            "generate_answer": self.generate_answer_action.update_handler,
+        }
 
         self.memory: MemorySaver = memory or MemorySaver()
 
-        self.graph = self._build_graph()
+        self.graph: CompiledStateGraph = self._build_graph()
 
     def _build_graph(self) -> CompiledStateGraph:
         """Create and compile the state graph."""
@@ -69,27 +79,27 @@ class SHRAGPipeline:
 
         # Add conditional edges for routing and grading
         _ = workflow.add_conditional_edges(
-            start_key="route_question",
-            condition=lambda state: state.get("route_query"),
-            conditional_edge_mapping={
+            source="route_question",
+            path=lambda state: state.get("route_query"),
+            path_map={
                 "retrieval": "retrieve",
                 "answer": "generate_answer",
             },
         )
 
         _ = workflow.add_conditional_edges(
-            start_key="grade_hallucination",
-            condition=lambda state: state.get("hallucination_score") is False,
-            conditional_edge_mapping={
+            source="grade_hallucination",
+            path=lambda state: state.get("hallucination_score") is False,
+            path_map={
                 True: "generate_answer",
                 False: "grade_answer",
             },
         )
 
         _ = workflow.add_conditional_edges(
-            start_key="grade_answer",
-            condition=lambda state: state.get("answer_score") is True,
-            conditional_edge_mapping={
+            source="grade_answer",
+            path=lambda state: state.get("answer_score") is True,
+            path_map={
                 True: END,
                 False: END,
             },
@@ -115,6 +125,7 @@ class SHRAGPipeline:
 
         reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key)
         retriever = LanceDBRetriever(
+            name="LanceDBRetriever",
             table=vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),
             embeddings=vector_store.embeddings,
             reranker=reranker,

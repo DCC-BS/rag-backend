@@ -5,9 +5,8 @@ from unittest.mock import Mock
 
 from langchain.schema import Document
 
-from rag.core.rag_states import (
+from rag.models.rag_states import (
     GradeAnswer,
-    GradeDocuments,
     GradeHallucination,
     RouteQuery,
 )
@@ -99,11 +98,6 @@ def create_hallucination_grader_llm(scores: list[Literal["yes", "no"]]) -> MockL
     return create_structured_output_llm(
         GradeHallucination, [GradeHallucination(binary_score=score) for score in scores]
     )
-
-
-def create_document_grader_llm(scores: list[Literal["yes", "no"]]) -> MockLLM:
-    """Create a mock document grader LLM that returns the specified scores."""
-    return create_structured_output_llm(GradeDocuments, [GradeDocuments(binary_score=score) for score in scores])
 
 
 def create_answer_grader_llm(scores: list[Literal["yes", "no"]]) -> MockLLM:

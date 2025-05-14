@@ -4,11 +4,10 @@ import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.graph.state import StateDict
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
-from rag.models.rag_states import GradeHallucination
+from rag.models.rag_states import GradeHallucination, RAGState
 from rag.models.stream_response import StreamResponse
 
 
@@ -24,7 +23,7 @@ class GradeHallucinationAction(ActionProtocol):
             GradeHallucination, method="json_schema"
         )
 
-    def __call__(self, state: StateDict, config: RunnableConfig) -> Command[Literal["generate_answer", "grade_answer"]]:
+    def __call__(self, state: RAGState, config: RunnableConfig) -> Command[Literal["generate_answer", "grade_answer"]]:
         """
         Grade hallucination on retrieved documents and answer.
         """

@@ -5,11 +5,10 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END
-from langgraph.graph.state import StateDict
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
-from rag.models.rag_states import GradeAnswer
+from rag.models.rag_states import GradeAnswer, RAGState
 from rag.models.stream_response import StreamResponse
 
 
@@ -23,7 +22,7 @@ class GradeAnswerAction(ActionProtocol):
         self.llm = llm
         self.structured_llm_grade_answer = self.llm.with_structured_output(GradeAnswer, method="json_schema")
 
-    def __call__(self, state: StateDict, config: RunnableConfig):
+    def __call__(self, state: RAGState, config: RunnableConfig):
         """
         Grade answer generation.
         """

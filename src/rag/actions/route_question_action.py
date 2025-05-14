@@ -4,11 +4,10 @@ import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.graph.state import StateDict
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
-from rag.models.rag_states import RouteQuery
+from rag.models.rag_states import RAGState, RouteQuery
 from rag.models.stream_response import StreamResponse
 
 
@@ -22,7 +21,7 @@ class RouteQuestionAction(ActionProtocol):
         self.llm = llm
         self.structured_llm_router = self.llm.with_structured_output(schema=RouteQuery, method="json_schema")
 
-    def __call__(self, state: StateDict, config: RunnableConfig) -> Command[Literal["generate_answer", "retrieve"]]:
+    def __call__(self, state: RAGState, config: RunnableConfig) -> Command[Literal["generate_answer", "retrieve"]]:
         """
         Route question to web search or RAG.
 

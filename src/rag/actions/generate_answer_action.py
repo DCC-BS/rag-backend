@@ -6,9 +6,9 @@ from langchain.schema import BaseMessage
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.graph.state import StateDict
 
 from rag.actions.action_protocol import ActionProtocol
+from rag.models.rag_states import RAGState
 from rag.models.stream_response import StreamResponse
 
 
@@ -33,7 +33,7 @@ class GenerateAnswerAction(ActionProtocol):
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.llm = llm
 
-    def __call__(self, state: StateDict, config: RunnableConfig):
+    def __call__(self, state: RAGState, config: RunnableConfig):
         """
         Generate an answer based on the context and question.
 

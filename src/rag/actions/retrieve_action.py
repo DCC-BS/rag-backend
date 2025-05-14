@@ -3,9 +3,9 @@ from typing import Any, Protocol
 import structlog
 from langchain.schema import Document
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph.state import StateDict
 
 from rag.actions.action_protocol import ActionProtocol
+from rag.models.rag_states import RAGState
 from rag.models.stream_response import StreamResponse
 
 
@@ -24,7 +24,7 @@ class RetrieveAction(ActionProtocol):
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.retriever = retriever
 
-    def __call__(self, state: StateDict, config: RunnableConfig) -> dict[str, list[Document]]:
+    def __call__(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         self.logger.info("---RETRIEVE DOCUMENTS---")
         docs: list[Document] = self.retriever.invoke(
             input=state["input"],

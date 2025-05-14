@@ -10,8 +10,9 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command, Interrupt
 
-from rag.core.rag_pipeline import RetrieverProtocol, SHRAGPipeline
-from tests.unit.rag.core.test_mocks import MockRAGState
+from rag.actions.retrieve_action import RetrieverProtocol
+from rag.services.rag_pipeline import SHRAGPipeline
+from tests.unit.rag.services.test_mocks import MockRAGState
 
 
 @pytest.fixture
@@ -20,22 +21,14 @@ def pipeline():
     mock_logger = Mock()
     mock_retriever = Mock(spec=RetrieverProtocol)
     mock_llm = Mock()
-    mock_query_rewriter_llm = Mock()
     mock_memory = Mock(spec=MemorySaver)
     mock_config = Mock()
 
     pipeline = SHRAGPipeline(
         llm=mock_llm,
-        query_rewriter_llm=mock_query_rewriter_llm,
         retriever=mock_retriever,
         memory=mock_memory,
-        system_prompt="Test system prompt",
     )
-
-    pipeline.structured_llm_router = Mock()
-    pipeline.structured_llm_grade_documents = Mock()
-    pipeline.structured_llm_grade_hallucination = Mock()
-    pipeline.structured_llm_grade_answer = Mock()
 
     pipeline._build_graph = MagicMock()
     pipeline.graph = Mock()
