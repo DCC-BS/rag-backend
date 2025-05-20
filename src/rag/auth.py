@@ -126,7 +126,7 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
     username: str = username_val
 
     if organization_val is None:
-        organization_val = "test"
+        organization_val = "Sozialhilfe"
         # TODO: Implement fetch organization raise credentials_exception
     organization: str = organization_val
 

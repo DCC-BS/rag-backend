@@ -18,6 +18,7 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 
 TOKEN_TYPE = os.environ.get("TOKEN_TYPE") or "bearer"
+CONST_SPLIT_STRING = "#MAGIC_SPLIT#"
 
 
 @asynccontextmanager
@@ -73,7 +74,7 @@ async def chat(
                 current_user.organization,
                 chat_message.thread_id,
             ):
-                yield f"{event}\n"
+                yield f"{event.model_dump_json()}{CONST_SPLIT_STRING}"
 
         except Exception as e:
             logger.error(
@@ -86,11 +87,11 @@ async def chat(
                 },
                 exc_info=True,
             )
-            yield "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.\n"
+            yield "Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/plain",
+        media_type="text/event-stream",
     )
 
 

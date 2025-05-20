@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import structlog
+from langchain_core.messages import AIMessageChunk
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -76,6 +77,7 @@ class SHRAGPipeline:
         _ = workflow.add_edge(start_key=START, end_key="route_question")
         _ = workflow.add_edge(start_key="retrieve", end_key="generate_answer")
         _ = workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
+        _ = workflow.add_edge(start_key="grade_answer", end_key=END)
 
         # Add conditional edges for routing and grading
         _ = workflow.add_conditional_edges(
@@ -89,19 +91,10 @@ class SHRAGPipeline:
 
         _ = workflow.add_conditional_edges(
             source="grade_hallucination",
-            path=lambda state: state.get("hallucination_score") is False,
+            path=lambda state: state.get("hallucination_score"),
             path_map={
                 True: "generate_answer",
                 False: "grade_answer",
-            },
-        )
-
-        _ = workflow.add_conditional_edges(
-            source="grade_answer",
-            path=lambda state: state.get("answer_score") is True,
-            path_map={
-                True: END,
-                False: END,
             },
         )
 
@@ -172,12 +165,25 @@ class SHRAGPipeline:
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
-        async for chunk in self.graph.astream(input=user_input, stream_mode=["updates"], config=config):
-            kind, content = chunk
+        async for kind, content in self.graph.astream(
+            input=user_input, stream_mode=["updates", "messages"], config=config
+        ):
             if kind == "updates" and isinstance(content, dict):
                 # Each update may include outputs from one or several nodes.
                 for key, update in content.items():
-                    if key in self.update_handlers:
+                    if key in self.update_handlers and key != "generate_answer":
                         yield self.update_handlers[key](update)
                     else:
                         self.logger.info(f"Unknown update: {key}")
+            elif kind == "messages":
+                message, metadata = content
+                if (
+                    message is not None
+                    and isinstance(message, AIMessageChunk)
+                    and isinstance(message.content, str)
+                    and message.content != ""
+                    and metadata is not None
+                    and isinstance(metadata, dict)
+                    and metadata.get("langgraph_node") == "generate_answer"
+                ):
+                    yield StreamResponse.create_answer_response(message="AI Antwort", answer_text=message.content)

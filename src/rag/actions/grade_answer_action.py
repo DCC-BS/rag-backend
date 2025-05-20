@@ -4,7 +4,6 @@ import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
@@ -48,16 +47,13 @@ class GradeAnswerAction(ActionProtocol):
 
             return Command(
                 update={"answer_score": True},
-                goto=END,
             )
         else:
             self.logger.info("---ANSWER IS NOT RELEVANT---")
             return Command(
                 update={
                     "answer_score": False,
-                    "answer": "Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.",
                 },
-                goto=END,
             )
 
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:

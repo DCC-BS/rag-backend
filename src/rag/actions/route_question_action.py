@@ -33,6 +33,12 @@ class RouteQuestionAction(ActionProtocol):
         """
 
         self.logger.info("---ROUTE QUESTION---")
+        if "context" not in state or state["context"] is None:
+            self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
+            return Command(
+                update={"route_query": "retrieval"},
+                goto="retrieve",
+            )
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""

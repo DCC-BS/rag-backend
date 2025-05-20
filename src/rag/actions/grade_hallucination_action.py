@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any, Literal, override
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -18,11 +18,12 @@ class GradeHallucinationAction(ActionProtocol):
 
     def __init__(self, llm: ChatOpenAI) -> None:
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
-        self.llm = llm
+        self.llm: ChatOpenAI = llm
         self.structured_llm_grade_hallucination = self.llm.with_structured_output(
             GradeHallucination, method="json_schema"
         )
 
+    @override
     def __call__(self, state: RAGState, config: RunnableConfig) -> Command[Literal["generate_answer", "grade_answer"]]:
         """
         Grade hallucination on retrieved documents and answer.
@@ -30,6 +31,7 @@ class GradeHallucinationAction(ActionProtocol):
         self.logger.info("---GRADE HALLUCINATION---")
         system = """You are a hallucination checker. You are given a list of retrieved documents and an answer.
         You are to grade the answer based on the retrieved documents.
+        If the answer is "Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.", return 'no'.
         If the answer is not grounded in the retrieved documents, return 'yes'.
         If the answer is grounded in the retrieved document, return 'no'.
         """
@@ -51,15 +53,14 @@ class GradeHallucinationAction(ActionProtocol):
             self.logger.info("---HALLUCINATION DETECTED---")
             return Command(
                 update={"hallucination_score": True},
-                goto="generate_answer",
             )
         else:
             self.logger.info("---HALLUCINATION NOT DETECTED---")
             return Command(
                 update={"hallucination_score": False},
-                goto="grade_answer",
             )
 
+    @override
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
