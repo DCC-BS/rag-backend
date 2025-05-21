@@ -24,8 +24,8 @@ class GenerateAnswerAction(ActionProtocol):
         "If you don't know the answer, say 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.' "
         "Don't try to make up an answer. "
         "Answer in German. "
-        "For each statement in your answer, cite the source document using [filename] format at the end of the relevant sentence or paragraph. "
-        "If multiple documents support a statement, include all relevant citations like [doc1][doc2]. "
+        "For each statement in your answer, cite the source document id by adding it in brackets at the end of the sentence or paragraph like this: [file_id]"
+        "If multiple documents support a statement, include all relevant citations like [file_id_1][file_id_2][file_id_3]"
         "Only cite documents that directly support your statements."
     )
 
@@ -50,8 +50,19 @@ class GenerateAnswerAction(ActionProtocol):
 
         # Format context with document metadata for citations
         formatted_context: list[str] = []
-        for doc in state["context"]:  # pyright: ignore[reportOptionalIterable]
-            formatted_context.append(f"Content: {doc.page_content}\nSource: {doc.metadata.get("filename", "unknown")}")
+        for idx, doc in enumerate(state["context"]):  # pyright: ignore[reportOptionalIterable]
+            formatted_context.append(
+                f"""
+                <document>
+                <content>
+                {doc.page_content}
+                </content>
+                <file_id>
+                {idx + 1}
+                </file_id>
+                </document>
+                """
+            )
 
         context: str = "\n\n".join(formatted_context)
 

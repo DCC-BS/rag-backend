@@ -24,7 +24,7 @@ class RouteQuery(BaseModel):
 
 class OutputState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    context: list[Document] | None
+    context: list[Document]
     answer: str | None
     hallucination_score: Literal["yes", "no"] | None
     answer_score: Literal["yes", "no"] | None
