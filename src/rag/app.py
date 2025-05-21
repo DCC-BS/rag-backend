@@ -18,7 +18,7 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 
 TOKEN_TYPE = os.environ.get("TOKEN_TYPE") or "bearer"
-CONST_SPLIT_STRING = "#MAGIC_SPLIT#"
+CONST_SPLIT_STRING = "\0"
 
 
 @asynccontextmanager
