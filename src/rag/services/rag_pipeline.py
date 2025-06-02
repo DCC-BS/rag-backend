@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 
 import structlog
@@ -107,6 +107,42 @@ class SHRAGPipeline:
 
         return compiled_graph
 
+    def _prepare_user_input(
+        self,
+        message: str | None,
+        user_organization: str | None,
+        thread_id: str | None,
+        resume_action: str | None,
+        resume_data: str | None,
+    ) -> dict[str, Any] | Command[Any]:
+        if resume_action is not None:
+            if thread_id is None:
+                raise ValueError("thread_id is required when resuming execution")
+            return Command(resume={"action": resume_action, "data": resume_data})
+
+        if message is None or user_organization is None or thread_id is None:
+            raise ValueError("message, user_organization, and thread_id are required for new queries")
+        return {"input": message, "user_organization": user_organization}
+
+    def _handle_updates_event(self, content: dict[str, Any]) -> Iterator[StreamResponse]:
+        for key, update_content in content.items():
+            if key in self.update_handlers and key != "generate_answer":
+                yield self.update_handlers[key](update_content)
+            elif key != "generate_answer":
+                self.logger.info(f"Unknown update key: {key}, value: {update_content}")
+
+    def _handle_messages_event(self, stream_content: Any) -> StreamResponse | None:
+        message_chunk, metadata = stream_content
+
+        if not isinstance(message_chunk, AIMessageChunk):
+            return None
+        if not isinstance(message_chunk.content, str) or not message_chunk.content:
+            return None
+        if not isinstance(metadata, dict) or metadata.get("langgraph_node") != "generate_answer":
+            return None
+
+        return StreamResponse.create_answer_response(message="AI Antwort", answer_text=message_chunk.content)
+
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
         if vector_store.embeddings is None:
@@ -151,39 +187,25 @@ class SHRAGPipeline:
         resume_action: str | None = None,
         resume_data: str | None = None,
     ) -> AsyncIterator[StreamResponse]:
-        if resume_action is not None:
-            # Resume execution case
-            user_input = Command(resume={"action": resume_action, "data": resume_data})
-            if thread_id is None:
-                raise ValueError("thread_id is required when resuming execution")
-        else:
-            # New query case
-            if message is None or user_organization is None or thread_id is None:
-                raise ValueError("message, user_organization, and thread_id are required for new queries")
-            user_input = {"input": message, "user_organization": user_organization}
+        user_input = self._prepare_user_input(message, user_organization, thread_id, resume_action, resume_data)
+
+        # thread_id is validated by _prepare_user_input for its necessity.
+        # It must be non-None if execution reaches here without an error.
+        if thread_id is None:
+            # This case should ideally not be hit if _prepare_user_input is comprehensive,
+            # but as RunnableConfig requires it, an explicit check guards against misuse.
+            raise ValueError("thread_id is required for configuring the stream.")
 
         recursion_limit = self.config.RETRIEVER.MAX_RECURSION
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
-        async for kind, content in self.graph.astream(
+        async for kind, stream_content in self.graph.astream(
             input=user_input, stream_mode=["updates", "messages"], config=config
         ):
-            if kind == "updates" and isinstance(content, dict):
-                # Each update may include outputs from one or several nodes.
-                for key, update in content.items():
-                    if key in self.update_handlers and key != "generate_answer":
-                        yield self.update_handlers[key](update)
-                    else:
-                        self.logger.info(f"Unknown update: {key}")
+            if kind == "updates" and isinstance(stream_content, dict):
+                for response in self._handle_updates_event(stream_content):
+                    yield response
             elif kind == "messages":
-                message, metadata = content
-                if (
-                    message is not None
-                    and isinstance(message, AIMessageChunk)
-                    and isinstance(message.content, str)
-                    and message.content != ""
-                    and metadata is not None
-                    and isinstance(metadata, dict)
-                    and metadata.get("langgraph_node") == "generate_answer"
-                ):
-                    yield StreamResponse.create_answer_response(message="AI Antwort", answer_text=message.content)
+                response = self._handle_messages_event(stream_content)
+                if response:
+                    yield response
