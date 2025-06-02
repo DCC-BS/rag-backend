@@ -15,8 +15,8 @@ from rag.models.user import User
 
 _ = load_dotenv()
 
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
+AZURE_DISCOVERY_URL = "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration"
 
 key_cache: TTLCache[str, dict[str, list[dict[str, Any]]]] = TTLCache(maxsize=1, ttl=3600)
 
@@ -27,7 +27,7 @@ def _raise_no_jwks_uri_exception() -> None:
     )
 
 
-async def get_google_public_keys() -> dict[str, list[dict[str, Any]]]:
+async def get_azure_public_keys() -> dict[str, list[dict[str, Any]]]:
     cached_keys = key_cache.get("keys")
     if cached_keys:
         return cached_keys
@@ -35,7 +35,7 @@ async def get_google_public_keys() -> dict[str, list[dict[str, Any]]]:
     async with httpx.AsyncClient() as client:
         try:
             # 1. Get discovery document
-            disovery_response = await client.get(GOOGLE_DISCOVERY_URL)
+            disovery_response = await client.get(AZURE_DISCOVERY_URL)
             _ = disovery_response.raise_for_status()
             discovery_data = disovery_response.json()
             jwks_uri = discovery_data.get("jwks_uri")
@@ -49,19 +49,19 @@ async def get_google_public_keys() -> dict[str, list[dict[str, Any]]]:
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Failed to fetch Google keys: {e.response.text}",
+                detail=f"Failed to fetch Azure keys: {e.response.text}",
             ) from e
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching Google keys: {e!s}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching Azure keys: {e!s}"
             ) from e
         else:
             return jwks
-    raise AssertionError("Should not be reached: Failed to get Google public keys")
+    raise AssertionError("Should not be reached: Failed to get Azure public keys")
 
 
 oauth2_scheme = OpenIdConnect(
-    openIdConnectUrl=GOOGLE_DISCOVERY_URL, auto_error=False
+    openIdConnectUrl=AZURE_DISCOVERY_URL, auto_error=False
 )  # auto_error=False to customize error
 
 
@@ -70,7 +70,6 @@ def _validate_and_decode_id_token(
     jwks: dict[str, list[dict[str, Any]]],
     access_token_from_header: str | None,
     audience: str | None,
-    issuer: str,
     credentials_exception: HTTPException,
 ) -> dict[str, Any]:
     try:
@@ -104,9 +103,21 @@ def _validate_and_decode_id_token(
         rsa_key,
         algorithms=["RS256"],
         audience=audience,
-        issuer=issuer,
+        options={"verify_iss": False},  # Disable default issuer validation for common endpoint
         access_token=access_token_from_header,
     )
+
+    # Manual issuer validation based on tid
+    token_issuer = payload.get("iss")
+    token_tid = payload.get("tid")
+
+    if not token_issuer or not token_tid:
+        raise credentials_exception  # Missing iss or tid claim
+
+    expected_issuer = f"https://login.microsoftonline.com/{token_tid}/v2.0"
+    if token_issuer != expected_issuer:
+        raise credentials_exception  # Issuer does not match tenant ID
+
     return payload
 
 
@@ -115,7 +126,7 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
     email: str | None = payload.get("email")
     picture: str | None = payload.get("picture")
     username_val: str | None = payload.get("name")
-    organization_val: str | None = payload.get("hd")
+    organization_val: str | None = payload.get("tid")  # Use tid for organization
 
     if user_id_val is None:
         raise credentials_exception
@@ -126,8 +137,9 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
     username: str = username_val
 
     if organization_val is None:
-        organization_val = "Sozialhilfe"
-        # TODO: Implement fetch organization raise credentials_exception
+        # Fallback or specific handling if tid is unexpectedly missing
+        # For now, we'll raise an exception as tid should be present
+        raise credentials_exception  # Missing tid claim for organization
     organization: str = organization_val
 
     return User(
@@ -156,13 +168,12 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        jwks = await get_google_public_keys()
+        jwks = await get_azure_public_keys()
         payload = _validate_and_decode_id_token(
             token,
             jwks,
             access_token_from_header,
-            GOOGLE_CLIENT_ID,
-            "https://accounts.google.com",
+            AZURE_CLIENT_ID,
             credentials_exception,
         )
         user = _create_user_from_payload(payload, credentials_exception)
