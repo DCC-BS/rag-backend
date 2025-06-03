@@ -1,13 +1,14 @@
 from dataclasses import dataclass
 from typing import Any, override
 
-from lancedb.rerankers import Reranker
-from lancedb.table import Table
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.schema import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from pydantic import Field
+
+from lancedb.rerankers import Reranker
+from lancedb.table import Table
 
 
 @dataclass
@@ -32,9 +33,9 @@ class LanceDBRetriever(BaseRetriever):
         query: str,
         *,
         run_manager: CallbackManagerForRetrieverRun,
-        user_organization: str,
+        user_organizations: list[str],
     ) -> list[Document]:
-        filter_query: str = f"metadata.organization IN ('{user_organization}')"
+        filter_query: str = f"metadata.organization IN ('{",".join(user_organizations)}')"
         vector: list[float] = self.embeddings.embed_query(text=query)
 
         results: list[dict[Any, Any]] = (

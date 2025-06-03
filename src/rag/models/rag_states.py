@@ -10,7 +10,7 @@ from typing_extensions import TypedDict
 
 class InputState(TypedDict):
     input: str
-    user_organization: str
+    user_organizations: list[str]
 
 
 class RouteQuery(BaseModel):

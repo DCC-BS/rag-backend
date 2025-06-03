@@ -6,4 +6,4 @@ class User(BaseModel):
     username: str
     email: str | None = None
     picture: str | None = None
-    organization: str
+    organizations: list[str] = []

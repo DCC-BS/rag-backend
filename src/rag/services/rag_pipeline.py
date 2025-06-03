@@ -110,7 +110,7 @@ class SHRAGPipeline:
     def _prepare_user_input(
         self,
         message: str | None,
-        user_organization: str | None,
+        user_organizations: list[str] | None,
         thread_id: str | None,
         resume_action: str | None,
         resume_data: str | None,
@@ -120,9 +120,9 @@ class SHRAGPipeline:
                 raise ValueError("thread_id is required when resuming execution")
             return Command(resume={"action": resume_action, "data": resume_data})
 
-        if message is None or user_organization is None or thread_id is None:
-            raise ValueError("message, user_organization, and thread_id are required for new queries")
-        return {"input": message, "user_organization": user_organization}
+        if message is None or user_organizations is None or user_organizations == [] or thread_id is None:
+            raise ValueError("message, user_organizations, and thread_id are required for new queries")
+        return {"input": message, "user_organizations": user_organizations}
 
     def _handle_updates_event(self, content: dict[str, Any]) -> Iterator[StreamResponse]:
         for key, update_content in content.items():
@@ -182,13 +182,15 @@ class SHRAGPipeline:
     async def astream_query(
         self,
         message: str | None = None,
-        user_organization: str | None = None,
+        user_organizations: list[str] | None = None,
         thread_id: str | None = None,
         resume_action: str | None = None,
         resume_data: str | None = None,
     ) -> AsyncIterator[StreamResponse]:
-        user_input = self._prepare_user_input(message, user_organization, thread_id, resume_action, resume_data)
-
+        if user_organizations is None:
+            user_organizations = []
+        user_input = self._prepare_user_input(message, user_organizations, thread_id, resume_action, resume_data)
+        self.logger.info(f"User input: {user_input}")
         # thread_id is validated by _prepare_user_input for its necessity.
         # It must be non-None if execution reaches here without an error.
         if thread_id is None:

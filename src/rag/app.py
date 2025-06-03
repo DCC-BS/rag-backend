@@ -71,7 +71,7 @@ async def chat(
         try:
             async for event in pipeline.astream_query(
                 chat_message.message,
-                current_user.organization,
+                current_user.organizations,
                 chat_message.thread_id,
             ):
                 yield f"{event.model_dump_json()}{CONST_SPLIT_STRING}"

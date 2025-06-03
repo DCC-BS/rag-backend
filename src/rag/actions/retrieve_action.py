@@ -28,7 +28,7 @@ class RetrieveAction(ActionProtocol):
         self.logger.info("---RETRIEVE DOCUMENTS---")
         docs: list[Document] = self.retriever.invoke(
             input=state["input"],
-            user_organization=state["user_organization"],
+            user_organizations=state["user_organizations"],
             config=config,
         )
 

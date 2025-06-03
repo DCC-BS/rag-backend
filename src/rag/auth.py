@@ -16,7 +16,8 @@ from rag.models.user import User
 _ = load_dotenv()
 
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
-AZURE_DISCOVERY_URL = "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration"
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+AZURE_DISCOVERY_URL = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}/v2.0/.well-known/openid-configuration"
 
 key_cache: TTLCache[str, dict[str, list[dict[str, Any]]]] = TTLCache(maxsize=1, ttl=3600)
 
@@ -126,7 +127,7 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
     email: str | None = payload.get("email")
     picture: str | None = payload.get("picture")
     username_val: str | None = payload.get("name")
-    organization_val: str | None = payload.get("tid")  # Use tid for organization
+    roles_val: list[str] = payload.get("roles", [])
 
     if user_id_val is None:
         raise credentials_exception
@@ -136,18 +137,16 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
         raise credentials_exception
     username: str = username_val
 
-    if organization_val is None:
-        # Fallback or specific handling if tid is unexpectedly missing
-        # For now, we'll raise an exception as tid should be present
-        raise credentials_exception  # Missing tid claim for organization
-    organization: str = organization_val
+    if roles_val == []:
+        raise credentials_exception
+    roles: list[str] = roles_val
 
     return User(
         id=user_id,
         email=email,
         picture=picture,
         username=username,
-        organization=organization,
+        organizations=roles,
     )
 
 
