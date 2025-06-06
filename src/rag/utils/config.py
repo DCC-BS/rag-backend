@@ -50,37 +50,9 @@ class DoclingConfig:
 
 
 @dataclass
-class LoginCredentials:
-    email: str
-    failed_login_attempts: int
-    name: str
-    password: str
-    logged_in: bool
-    roles: list[str]
-
-
-@dataclass
-class LoginCookieConfig:
-    expiry_days: int
-    key: str
-    name: str
-
-
-@dataclass
 class DataSource:
     name: str
     path: str
-
-
-@dataclass
-class Credentials:
-    usernames: dict[str, LoginCredentials]
-
-
-@dataclass
-class LoginConfig:
-    credentials: Credentials
-    cookie: LoginCookieConfig
 
 
 @dataclass
@@ -96,7 +68,6 @@ class AppConfig:
     CHAT: ChatConfig
     ROLES: list[str]
     DATA_DIR: str
-    LOGIN_CONFIG: LoginConfig
     DOC_SOURCES: dict[str, str] = MISSING
 
 

@@ -1,3 +1,4 @@
+import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, override
@@ -21,6 +22,8 @@ from langchain_core.documents import Document as LCDocument
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 
 from rag.utils.config import AppConfig, ConfigurationManager
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 class DocumentConverterFactory(Protocol):
