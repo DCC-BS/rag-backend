@@ -45,17 +45,17 @@ class SHRAGPipeline:
         # Instantiate actions
         self.route_question_action: RouteQuestionAction = RouteQuestionAction(llm=self.llm)
         self.retrieve_action: RetrieveAction = RetrieveAction(retriever=self.retriever)
-        self.grade_hallucination_action: GradeHallucinationAction = GradeHallucinationAction(llm=self.llm)
-        self.grade_answer_action: GradeAnswerAction = GradeAnswerAction(llm=self.llm)
+        # self.grade_hallucination_action: GradeHallucinationAction = GradeHallucinationAction(llm=self.llm)
+        # self.grade_answer_action: GradeAnswerAction = GradeAnswerAction(llm=self.llm)
         self.generate_answer_action: GenerateAnswerAction = GenerateAnswerAction(llm=self.llm)
 
         # Map node names to their update handlers
         self.update_handlers: dict[str, Callable[[dict[str, Any]], StreamResponse]] = {
             "route_question": self.route_question_action.update_handler,
             "retrieve": self.retrieve_action.update_handler,
-            "grade_hallucination": self.grade_hallucination_action.update_handler,
-            "grade_answer": self.grade_answer_action.update_handler,
-            "generate_answer": self.generate_answer_action.update_handler,
+            # "grade_hallucination": self.grade_hallucination_action.update_handler,
+            # "grade_answer": self.grade_answer_action.update_handler,
+            # "generate_answer": self.generate_answer_action.update_handler,
         }
 
         self.memory: MemorySaver = memory or MemorySaver()
@@ -69,15 +69,16 @@ class SHRAGPipeline:
         # Add nodes using the instantiated actions
         _ = workflow.add_node("route_question", self.route_question_action)
         _ = workflow.add_node("retrieve", self.retrieve_action)
-        _ = workflow.add_node("grade_hallucination", self.grade_hallucination_action)
-        _ = workflow.add_node("grade_answer", self.grade_answer_action)
+        # _ = workflow.add_node("grade_hallucination", self.grade_hallucination_action)
+        # _ = workflow.add_node("grade_answer", self.grade_answer_action)
         _ = workflow.add_node("generate_answer", self.generate_answer_action)
 
         # Add conditional edge based on skip_retrieval
         _ = workflow.add_edge(start_key=START, end_key="route_question")
         _ = workflow.add_edge(start_key="retrieve", end_key="generate_answer")
-        _ = workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
-        _ = workflow.add_edge(start_key="grade_answer", end_key=END)
+        _ = workflow.add_edge(start_key="generate_answer", end_key=END)
+        # _ = workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
+        # _ = workflow.add_edge(start_key="grade_answer", end_key=END)
 
         # Add conditional edges for routing and grading
         _ = workflow.add_conditional_edges(
@@ -89,14 +90,14 @@ class SHRAGPipeline:
             },
         )
 
-        _ = workflow.add_conditional_edges(
-            source="grade_hallucination",
-            path=lambda state: state.get("hallucination_score"),
-            path_map={
-                True: "generate_answer",
-                False: "grade_answer",
-            },
-        )
+        # _ = workflow.add_conditional_edges(
+        #     source="grade_hallucination",
+        #     path=lambda state: state.get("hallucination_score"),
+        #     path_map={
+        #         True: "generate_answer",
+        #         False: "grade_answer",
+        #     },
+        # )
 
         # Compile graph
         compiled_graph = workflow.compile(checkpointer=self.memory)
@@ -141,7 +142,7 @@ class SHRAGPipeline:
         if not isinstance(metadata, dict) or metadata.get("langgraph_node") != "generate_answer":
             return None
 
-        return StreamResponse.create_answer_response(message="AI Antwort", answer_text=message_chunk.content)
+        return StreamResponse.create_answer_response(message="AI Antwort", sender="GenerateAnswerAction", answer_text=message_chunk.content)
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()
@@ -167,14 +168,11 @@ class SHRAGPipeline:
         )
         return retriever
 
-    def _setup_llm(self, temperature: float | None = None):
-        temperature = temperature or self.config.LLM.TEMPERATURE
+    def _setup_llm(self):
         llm = ChatOpenAI(
             model=self.config.LLM.MODEL,
-            temperature=temperature,
             api_key=SecretStr("None"),
             base_url=self.config.LLM.API_URL,
-            max_completion_tokens=self.config.LLM.MAX_TOKENS,
         )
 
         return llm
