@@ -1,0 +1,149 @@
+services:
+  rag-backend:
+    build: .
+    container_name: rag-backend
+    volumes:
+      - .:/app
+    command: uv run fastapi dev src/rag/app.py --host 0.0.0.0 --port 8080
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [gpu]
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=mydatabase
+      - POSTGRES_HOST=paradedb
+      - POSTGRES_PORT=5432
+      - LLM_URL=http://llm:8000
+      - RERANKER_URL=http://reranker:8000
+      - EMBEDDING_URL=http://embedding:8000
+    depends_on:
+      - paradedb
+      - llm
+      - reranker
+      - embedding
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  paradedb:
+    image: paradedb/paradedb:latest
+    container_name: paradedb
+    environment:
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=mydatabase
+    volumes:
+      - paradedb_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    restart: always
+    networks:
+      - rag-network
+
+  llm:
+    image: vllm/vllm-openai:v0.9.1
+    container_name: vllm_qwen3_32b
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '1' ]
+              capabilities: [gpu]
+    volumes:
+      - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8001:8000"
+    ipc: host
+    command:
+      - "--port"
+      - "8000"
+      - "--model"
+      - "Qwen/Qwen3-32B-AWQ"
+      - "--max-model-len"
+      - "32000"
+      - "--enable-reasoning"
+      - "--reasoning-parser"
+      - "deepseek_r1"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "hermes"
+      - "--gpu-memory-utilization"
+      - "0.9"
+      - "--tensor-parallel-size"
+      - "1"
+    restart: always
+    networks:
+      - rag-network
+
+  reranker:
+    image: vllm/vllm-openai:v0.9.1
+    container_name: vllm_reranker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    volumes:
+      - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8002:8000"
+    ipc: host
+    command:
+      - "--port"
+      - "8000"
+      - "--model"
+      - "Qwen/Qwen3-Reranker-0.6B"
+      - "--task=score"
+      - "--gpu-memory-utilization=0.15"
+    restart: always
+    networks:
+      - rag-network
+
+  embedding:
+    image: vllm/vllm-openai:v0.9.1
+    container_name: vllm_embedding
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    volumes:
+      - "${HOME}/.cache/huggingface:/root/.cache/huggingface"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    ports:
+      - "8003:8000"
+    ipc: host
+    command:
+      - "--port"
+      - "8000"
+      - "--model"
+      - "Qwen/Qwen3-Embedding-0.6B"
+      - "--task=embedding"
+      - "--gpu-memory-utilization=0.15"
+    restart: always
+    networks:
+      - rag-network
+
+volumes:
+  paradedb_data:
+
+networks:
+  rag-network:
+    driver: bridge
