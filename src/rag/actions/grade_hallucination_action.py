@@ -67,5 +67,6 @@ class GradeHallucinationAction(ActionProtocol):
         """
         return StreamResponse.create_status(
             message="Antwort enthält Halluzinationen",
+            sender="GradeHallucinationAction",
             decision="Ja" if data.get("hallucination_score") else "Nein",
         )

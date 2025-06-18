@@ -78,4 +78,4 @@ class GenerateAnswerAction(ActionProtocol):
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_answer_response(message="AI Antwort", answer_text=data.get("answer", ""))
+        return StreamResponse.create_answer_response(message="AI Antwort", sender="GenerateAnswerAction", answer_text=data.get("answer", ""))

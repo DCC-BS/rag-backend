@@ -123,7 +123,6 @@ class MockConfig:
         self.LLM.MODEL = "test-model"
         self.LLM.TEMPERATURE = 0.0
         self.LLM.API_URL = "http://test-api-url"
-        self.LLM.MAX_TOKENS = 500
 
         self.RETRIEVER = MagicMock()
         self.RETRIEVER.TOP_K = 3

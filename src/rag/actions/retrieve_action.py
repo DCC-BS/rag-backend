@@ -39,5 +39,5 @@ class RetrieveAction(ActionProtocol):
         Handles updates from the action and returns a StreamResponse.
         """
         return StreamResponse.create_document_response(
-            message="Relevante Dokumente gefunden", docs=data.get("context", [])
+            message="Relevante Dokumente gefunden", sender="RetrieveAction", docs=data.get("context", [])
         )

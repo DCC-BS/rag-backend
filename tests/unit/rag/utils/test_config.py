@@ -36,7 +36,6 @@ LLM:
   MODEL: "test-model"
   API_URL: "http://localhost:8001"
   TEMPERATURE: 0.7
-  MAX_TOKENS: 512
 DOCLING:
   NUM_THREADS: 4
   USE_GPU: false
@@ -267,7 +266,6 @@ LLM:
   MODEL: "test-model"
   API_URL: "http://localhost:8001"
   TEMPERATURE: 0.7
-  MAX_TOKENS: 512
 DOCLING:
   NUM_THREADS: 4
   USE_GPU: false

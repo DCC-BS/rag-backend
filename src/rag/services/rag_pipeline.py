@@ -12,8 +12,6 @@ from langgraph.types import Command
 from pydantic import SecretStr
 
 from rag.actions.generate_answer_action import GenerateAnswerAction
-from rag.actions.grade_answer_action import GradeAnswerAction
-from rag.actions.grade_hallucination_action import GradeHallucinationAction
 from rag.actions.retrieve_action import RetrieveAction, RetrieverProtocol
 from rag.actions.route_question_action import RouteQuestionAction
 from rag.connectors.bento_embeddings import BentoMLReranker
@@ -142,7 +140,9 @@ class SHRAGPipeline:
         if not isinstance(metadata, dict) or metadata.get("langgraph_node") != "generate_answer":
             return None
 
-        return StreamResponse.create_answer_response(message="AI Antwort", sender="GenerateAnswerAction", answer_text=message_chunk.content)
+        return StreamResponse.create_answer_response(
+            message="AI Antwort", sender="GenerateAnswerAction", answer_text=message_chunk.content
+        )
 
     def _setup_retriever(self):
         vector_store = get_lancedb_doc_store()

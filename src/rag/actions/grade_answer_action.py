@@ -62,5 +62,6 @@ class GradeAnswerAction(ActionProtocol):
         """
         return StreamResponse.create_status(
             message="Antwort ist relevant",
+            sender="GradeAnswerAction",
             decision="Ja" if data.get("answer_score") else "Nein",
         )

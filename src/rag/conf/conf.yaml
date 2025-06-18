@@ -17,10 +17,8 @@ RETRIEVER:
 EMBEDDINGS:
   API_URL: "http://localhost:50001"
 LLM:
-  MODEL: "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
+  MODEL: "Qwen/Qwen3-32B-AWQ" # "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   API_URL: "http://localhost:8000/v1"
-  TEMPERATURE: 0.1
-  MAX_TOKENS: 3000
 DOCLING:
   NUM_THREADS: 16
   USE_GPU: True

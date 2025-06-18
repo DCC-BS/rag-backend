@@ -130,7 +130,6 @@ LLM:
   MODEL: "test-model"
   API_URL: "http://localhost:8001"
   TEMPERATURE: 0.7
-  MAX_TOKENS: 512
 DOCLING:
   NUM_THREADS: 4
   USE_GPU: false
@@ -185,7 +184,6 @@ LLM:
     MODEL: 123  # Should be string
     API_URL: null  # Should be string
     TEMPERATURE: "0.7"  # Should be float
-    MAX_TOKENS: "512"  # Should be integer
 DOCLING:
     NUM_THREADS: "4"  # Should be integer
     USE_GPU: "false"  # Should be boolean
@@ -253,7 +251,6 @@ LLM:
   MODEL: "test-model"
   API_URL: "http://localhost:8001"
   TEMPERATURE: 0.7
-  MAX_TOKENS: 512
 DOCLING:
   NUM_THREADS: 4
   USE_GPU: false

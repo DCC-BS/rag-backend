@@ -78,4 +78,5 @@ class RouteQuestionAction(ActionProtocol):
         """
         return StreamResponse.create_status(
             message=f"{"Suche relevante Dokumente" if data.get("route_query") == "retrieval" else "Antworte auf die Frage"}",
+            sender="RouteQuestionAction",
         )

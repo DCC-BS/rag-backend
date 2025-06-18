@@ -39,8 +39,6 @@ class EmbeddingsConfig:
 class LLMConfig:
     MODEL: str
     API_URL: str
-    TEMPERATURE: float
-    MAX_TOKENS: int
 
 
 @dataclass

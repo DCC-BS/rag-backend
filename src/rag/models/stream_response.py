@@ -27,27 +27,28 @@ class StreamResponse(BaseModel):
 
     type: StreamResponseType
     message: str
+    sender: str | None = None
     decision: str | None = None
     documents: list[Document] | None = None
     answer: str | None = None
     metadata: dict[str, str] | None = None
 
     @classmethod
-    def create_status(cls, message: str, decision: str | None = None) -> "StreamResponse":
+    def create_status(cls, message: str, sender: str, decision: str | None = None) -> "StreamResponse":
         """Create a simple status update response"""
-        return cls(type=StreamResponseType.STATUS, message=message, decision=decision)
+        return cls(type=StreamResponseType.STATUS, message=message, sender=sender, decision=decision)
 
     @classmethod
-    def create_document_response(cls, message: str, docs: list[Document]) -> "StreamResponse":
+    def create_document_response(cls, message: str, sender: str, docs: list[Document]) -> "StreamResponse":
         """Create a response containing retrieved documents"""
-        return cls(type=StreamResponseType.DOCUMENTS, message=message, documents=docs)
+        return cls(type=StreamResponseType.DOCUMENTS, message=message, sender=sender, documents=docs)
 
     @classmethod
-    def create_answer_response(cls, message: str, answer_text: str) -> "StreamResponse":
+    def create_answer_response(cls, message: str, sender: str, answer_text: str) -> "StreamResponse":
         """Create a response containing an AI generated answer"""
-        return cls(type=StreamResponseType.ANSWER, message=message, answer=answer_text)
+        return cls(type=StreamResponseType.ANSWER, message=message, sender=sender, answer=answer_text)
 
     @classmethod
-    def create_interrupt_response(cls, message: str, interrupt_data: dict[str, str]) -> "StreamResponse":
+    def create_interrupt_response(cls, message: str, sender: str, interrupt_data: dict[str, str]) -> "StreamResponse":
         """Create a response for user interaction interrupts"""
-        return cls(type=StreamResponseType.INTERRUPT, message=message, metadata=interrupt_data)
+        return cls(type=StreamResponseType.INTERRUPT, message=message, sender=sender, metadata=interrupt_data)
