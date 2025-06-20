@@ -5,11 +5,10 @@ from typing import Any, ClassVar, Protocol, override
 
 import structlog
 from docling.chunking import HybridChunker  # pyright: ignore[reportPrivateImportUsage]
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.document import ConversionResult
 from docling.datamodel.pipeline_options import (
-    AcceleratorDevice,
-    AcceleratorOptions,
     PdfPipelineOptions,
     TableFormerMode,
     TableStructureOptions,

@@ -1,6 +1,9 @@
 FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
+# Install PostgreSQL client for pg_isready command
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY uv.lock /app/uv.lock
@@ -12,4 +15,7 @@ COPY . /app
 
 RUN uv sync --frozen
 
-CMD [ "uv", "run", "python", "src/rag/app.py" ]
+COPY ./entrypoint.sh /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+CMD ["uv", "run", "src/rag/app.py", "--host", "0.0.0.0", "--port", "8080"]

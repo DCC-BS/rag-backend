@@ -1,0 +1,7 @@
+Generic single-database configuration.
+
+When you change your SQLAlchemy ORM models (e.g., add a new column), you generate a new migration script:
+
+`alembic revision --autogenerate -m "Add new column to documents table"`
+
+Alembic compares your models against the current database state and generates a Python script in the alembic/versions/ directory.

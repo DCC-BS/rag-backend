@@ -11,6 +11,80 @@ This is a template repository for Python projects that use uv for their dependen
 - **Github repository**: <https://github.com/DCC-BS/rag-application/>
 - **Documentation** <https://DCC-BS.github.io/rag-application/>
 
+## Component Descriptions
+* **FastAPI Application**: The main backend service that exposes the RAG API. It handles user authentication, manages the search-and-generation workflow, and serves the final answer to the user.
+
+* **PostgreSQL Database**: Our specialized database powered by Paradedb. It uses pgvector for efficient vector similarity search and pg_search for keyword-based text search, enabling powerful hybrid retrieval. It also stores all document content and role-based access metadata.
+
+* **Embedding & Reranking Services**: Two separate services, likely hosted with vLLM, that provide machine learning models as APIs. The embedding service turns text into numerical vectors, and the reranking service re-orders retrieved results for maximum relevance.
+
+* **Document Ingestion Service**: An automated background worker that processes documents from the file system. It uses docling to extract text, chunks the content, calls the embedding service, and loads everything into the PostgreSQL database. Features include:
+  - Real-time file watching with automatic processing
+  - Support for PDF, DOCX, PPTX, HTML, and XLSX files
+  - Role-based access control derived from directory structure
+  - Automatic embedding generation and database storage
+  - Incremental updates and conflict resolution
+
+* **Azure Entra ID**: Microsoft's cloud-based identity and access management service. We use it to authenticate users and manage roles, which determine which documents a user is allowed to access.
+
+* **DB Migration Runner**: This is not a long-running service, but a crucial startup task. It runs before the main application starts to ensure the database schema is up-to-date. It connects to the database, applies any pending Alembic migrations, and then exits, allowing the main application to launch safely.
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "Online: User Query Pipeline"
+        direction LR
+        User[<fa:fa-user> User] -->|1. HTTPS Request| FastAPI[<fa:fa-server> FastAPI App]
+        FastAPI -->|"2. Validate Token"| EntraID[<fa:fa-key> Azure Entra ID]
+        EntraID -->|"3. User Roles"| FastAPI
+        FastAPI -->|"4. Retrieve Docs"| Retriever(PGRoleRetriever)
+        Retriever -->|"5a. Hybrid Search (SQL)"| PostgreSQL[<fa:fa-database> PostgreSQL<br>pgvector + pg_bm25]
+        Retriever -->|"5b. Embed Query"| EmbeddingService[<fa:fa-microchip> Embedding Service]
+        PostgreSQL -->|"6. Candidate Chunks"| Retriever
+        Retriever -->|"7. Rerank"| Reranker[<fa:fa-microchip> Reranking Service]
+        Reranker -->|"8. Relevant Context"| FastAPI
+        FastAPI -->|"9. Generate Answer"| LLM[<fa:fa-robot> Generative LLM]
+        LLM -->|"10. Final Response"| FastAPI
+        FastAPI -->|"11. Send Response"| User
+    end
+
+    subgraph "Offline: Data Ingestion Pipeline"
+        direction TB
+        PDFs[<fa:fa-file-pdf> Source PDFs] --> Ingestion[<fa:fa-cogs> Ingestion Service]
+        Ingestion -->|Parse with Docling| EmbeddingService
+        EmbeddingService -->|Create Embeddings| Ingestion
+        Ingestion -->|Load Chunks & Vectors| PostgreSQL
+    end
+
+    style User fill:#D5E8D4,stroke:#82B366,stroke-width:2px
+    style FastAPI fill:#DAE8FC,stroke:#6C8EBF,stroke-width:2px
+    style PostgreSQL fill:#FFE6CC,stroke:#D79B00,stroke-width:2px
+    style Ingestion fill:#E1D5E7,stroke:#9673A6,stroke-width:2px
+```
+
+## Database Migrations with Alembic
+Using a migration tool like Alembic is essential for managing database schema changes in a production environment. It replaces manual schema management and ensures that your database state is version-controlled and repeatable.
+
+### Implementation Across Environments
+* Production (Kubernetes): The standard pattern is to use an `InitContainer`. In your application's `Deployment` manifest, you define an `initContainer` that uses your main application image. Its sole command is `alembic upgrade head`. Kubernetes ensures this container runs to completion (successfully applying migrations) before the main application container is started. This guarantees the schema is always correct when your app begins handling traffic.
+
+* Development (Docker Compose): A similar result is achieved using an `entrypoint.sh` wrapper script. This script is set as the `ENTRYPOINT` in your application's `Dockerfile`. It first waits for the database to become available, then runs `alembic upgrade head`, and finally executes the main application command (e.g., `uv run src/rag/app.py --host 0.0.0.0 --port 8080`). This mimics the `InitContainer` behavior by ensuring migrations are run before the server starts.
+
+### General Workflow
+1. Initial Setup: Run `alembic init alembic` once. Edit `alembic/env.py` to import your SQLAlchemy models' `Base` metadata.
+2. Creating a Migration: When you change your ORM models, run `alembic revision --autogenerate -m "Description of change"`.
+3. Applying a Migration: The `alembic upgrade head` command is run automatically on startup by the `InitContainer` (in K8s) or the `entrypoint.sh` script (in Docker Compose).
+
+## Document Ingestion
+
+The application includes an automated document ingestion service that processes files from the filesystem. See the [ingestion documentation](docs/ingestion.md) for detailed information about:
+
+- Setting up the ingestion service
+- Supported file formats
+- Directory structure and access roles
+- Running the service in development and production
+
 ## Getting started with your project
 
 #### Pre-requisites
@@ -136,9 +210,9 @@ sh-rag-chat/
 ## Technical Stack
 
 - **Backend Framework**: FastAPI
-- **Database**: SQLite (via SQLModel)
-- **Vector Storage**: LanceDB
-- **Authentication**: JWT-based
+- **Database**: PostgreSQL
+- **Vector Storage**: pgvector and pg_search
+- **Authentication**: Azure Entra ID
 - **Development Tools**:
   - UV (Package Manager)
   - Ruff (Linter)

@@ -24,15 +24,15 @@ class DocStoreConfig:
 
 @dataclass
 class RetrieverConfig:
-    TYPE: str
-    FETCH_FOR_RERANKING: int
-    TOP_K: int
-    MAX_RECURSION: int
+    BM25_LIMIT: int
+    VECTOR_LIMIT: int
+    RERANK_TOP_K: int
 
 
 @dataclass
 class EmbeddingsConfig:
     API_URL: str
+    EMBEDDING_INSTRUCTIONS: str
 
 
 @dataclass
@@ -42,9 +42,22 @@ class LLMConfig:
 
 
 @dataclass
+class RerankerConfig:
+    API_URL: str
+
+
+@dataclass
 class DoclingConfig:
     NUM_THREADS: int
     USE_GPU: bool
+
+
+@dataclass
+class IngestionConfig:
+    DATA_DIR: str
+    WATCH_ENABLED: bool = True
+    BATCH_SIZE: int = 10
+    SCAN_INTERVAL: int = 3600  # seconds
 
 
 @dataclass
@@ -62,7 +75,9 @@ class AppConfig:
     RETRIEVER: RetrieverConfig
     EMBEDDINGS: EmbeddingsConfig
     LLM: LLMConfig
+    RERANKER: RerankerConfig
     DOCLING: DoclingConfig
+    INGESTION: IngestionConfig
     CHAT: ChatConfig
     ROLES: list[str]
     DATA_DIR: str

@@ -14,9 +14,7 @@ from pydantic import SecretStr
 from rag.actions.generate_answer_action import GenerateAnswerAction
 from rag.actions.retrieve_action import RetrieveAction, RetrieverProtocol
 from rag.actions.route_question_action import RouteQuestionAction
-from rag.connectors.bento_embeddings import BentoMLReranker
-from rag.connectors.document_storage import get_lancedb_doc_store
-from rag.connectors.lance_retriever import LanceDBRetriever, LanceDBRetrieverConfig
+from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.rag_states import (
     InputState,
     OutputState,
@@ -145,26 +143,13 @@ class SHRAGPipeline:
         )
 
     def _setup_retriever(self):
-        vector_store = get_lancedb_doc_store()
-        if vector_store.embeddings is None:
-            raise ValueError("Embeddings are None")
-        if vector_store._text_key is None:
-            raise ValueError("Vector store has no text key")
-        if vector_store._vector_key is None:
-            raise ValueError("Vector store has no vector key")
-
-        reranker = BentoMLReranker(api_url=self.config.EMBEDDINGS.API_URL, column=vector_store._text_key)
-        retriever = LanceDBRetriever(
-            name="LanceDBRetriever",
-            table=vector_store.get_table(self.config.DOC_STORE.TABLE_NAME),
-            embeddings=vector_store.embeddings,
-            reranker=reranker,
-            config=LanceDBRetrieverConfig(
-                vector_col=vector_store._vector_key,
-                fts_col=vector_store._text_key,
-                k=self.config.RETRIEVER.TOP_K,
-                docs_before_rerank=self.config.RETRIEVER.FETCH_FOR_RERANKING,
-            ),
+        retriever = PGRoleRetriever(
+            reranker_api=self.config.RERANKER.API_URL,
+            embedding_api=self.config.EMBEDDINGS.API_URL,
+            embedding_instructions=self.config.EMBEDDINGS.EMBEDDING_INSTRUCTIONS,
+            bm25_limit=self.config.RETRIEVER.BM25_LIMIT,
+            vector_limit=self.config.RETRIEVER.VECTOR_LIMIT,
+            rerank_top_k=self.config.RETRIEVER.RERANK_TOP_K,
         )
         return retriever
 
@@ -196,7 +181,7 @@ class SHRAGPipeline:
             # but as RunnableConfig requires it, an explicit check guards against misuse.
             raise ValueError("thread_id is required for configuring the stream.")
 
-        recursion_limit = self.config.RETRIEVER.MAX_RECURSION
+        recursion_limit = 25
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
         async for kind, stream_content in self.graph.astream(
