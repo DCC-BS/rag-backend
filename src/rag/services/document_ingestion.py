@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, override
 
@@ -40,6 +41,12 @@ class DocumentIngestionService:
 
         self.observer = Observer()
         self.event_handler = None  # Will be initialized later
+        self.stats: dict[str, Any] = {
+            "new": 0,
+            "updated": 0,
+            "deleted": 0,
+            "by_role": defaultdict(int),
+        }
 
     def get_file_hash(self, file_path: Path) -> str:
         """Calculate SHA256 hash of a file.
@@ -228,12 +235,16 @@ class DocumentIngestionService:
                 self.logger.info(f"Document {file_path} needs update")
                 self.delete_document(document_path)
                 self.process_document(file_path, access_role)
+                self.stats["updated"] += 1
+                self.stats["by_role"][access_role] += 1
             else:
                 self.logger.debug(f"Document {file_path} is up to date")
         else:
             # New document
             self.logger.info(f"New document found: {file_path}")
             self.process_document(file_path, access_role)
+            self.stats["new"] += 1
+            self.stats["by_role"][access_role] += 1
 
     def scan_directory(self, directory: Path) -> None:
         """Scan a directory for documents and process them.
@@ -248,13 +259,38 @@ class DocumentIngestionService:
             return
 
         # Find all supported files
-        for file_path in directory.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in DoclingLoader.SUPPORTED_FORMATS:
-                self.process_file(file_path)
+        files_to_process = [
+            file_path
+            for file_path in directory.rglob("*")
+            if file_path.is_file() and file_path.suffix.lower() in DoclingLoader.SUPPORTED_FORMATS
+        ]
+        total_files = len(files_to_process)
+        self.logger.info(f"Found {total_files} documents to process.")
+
+        for i, file_path in enumerate(files_to_process):
+            self.logger.info(f"Processing document {i + 1}/{total_files}: {file_path}")
+            self.process_file(file_path)
+
+    def log_statistics(self) -> None:
+        """Log the collected statistics."""
+        # Convert defaultdict to dict for cleaner logging
+        stats_to_log = self.stats.copy()
+        stats_to_log["by_role"] = dict(self.stats["by_role"])
+        self.logger.info(
+            "Ingestion statistics",
+            new_documents=stats_to_log["new"],
+            updated_documents=stats_to_log["updated"],
+            deleted_documents=stats_to_log["deleted"],
+            roles=stats_to_log["by_role"],
+        )
 
     def initial_scan(self) -> None:
         """Perform initial scan of all configured data directories."""
         self.logger.info("Starting initial document scan")
+        # Reset stats for the scan
+        self.stats["new"] = 0
+        self.stats["updated"] = 0
+        self.stats["by_role"].clear()
 
         data_dir = Path(self.config.INGESTION.DATA_DIR)
         if not data_dir.exists():
@@ -262,6 +298,7 @@ class DocumentIngestionService:
             return
 
         self.scan_directory(data_dir)
+        self.log_statistics()
         self.logger.info("Initial document scan completed")
 
     def start_file_watcher(self) -> None:
@@ -323,6 +360,7 @@ class DocumentFileHandler(FileSystemEventHandler):
         """
         self.ingestion_service = ingestion_service
         self.logger = structlog.get_logger()
+        super().__init__()
 
     @override
     def on_created(self, event: Any) -> None:
@@ -347,3 +385,5 @@ class DocumentFileHandler(FileSystemEventHandler):
             file_path = event.src_path
             self.logger.info(f"File deleted: {file_path}")
             self.ingestion_service.delete_document(file_path)
+            self.ingestion_service.stats["deleted"] += 1
+            self.ingestion_service.log_statistics()
