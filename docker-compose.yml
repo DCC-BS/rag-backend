@@ -122,6 +122,9 @@ services:
       - "0.95"
       - "--tensor-parallel-size"
       - "1"
+      - "--uvicorn-log-level"
+      - "warning"
+      - "--disable-log-requests"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -156,6 +159,9 @@ services:
       - "Qwen/Qwen3-Reranker-0.6B"
       - "--task=score"
       - "--gpu-memory-utilization=0.15"
+      - "--uvicorn-log-level"
+      - "warning"
+      - "--disable-log-requests"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -190,6 +196,9 @@ services:
       - "Qwen/Qwen3-Embedding-0.6B"
       - "--task=embedding"
       - "--gpu-memory-utilization=0.15"
+      - "--uvicorn-log-level"
+      - "warning"
+      - "--disable-log-requests"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
