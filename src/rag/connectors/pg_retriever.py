@@ -11,7 +11,8 @@ from langchain.schema import (
 )
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from openai import Client
-from sqlalchemy import Engine, create_engine, select, text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import ARRAY, Engine, Integer, String, Text, bindparam, create_engine, select, text
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import TextClause
@@ -31,7 +32,8 @@ class PGRoleRetriever(BaseRetriever):
     # with Reciprocal Rank Fusion (RRF).
     # We only return the id of the chunk, not the full document.
     # This allows us to use sqlalchemy with the ORM to get the documents as objects.
-    id_query: TextClause = text("""
+    # Using autocommit=False prevents SQLAlchemy from interpreting colons in user input
+    _id_query: TextClause = text("""
             WITH bm25_ranked AS (
                 SELECT id, RANK() OVER (ORDER BY score DESC) as rank
                 FROM (
@@ -59,6 +61,15 @@ class PGRoleRetriever(BaseRetriever):
             ORDER BY score DESC
             LIMIT :final_limit;
         """)
+
+    id_query: TextClause = _id_query.bindparams(
+        bindparam("query_text", type_=String),
+        bindparam("bm25_limit", type_=Integer),
+        bindparam("embedding", type_=Vector(dim=1024)),
+        bindparam("vector_limit", type_=Integer),
+        bindparam("access_roles", type_=ARRAY(Text)),
+        bindparam("final_limit", type_=Integer),
+    )
 
     def __init__(
         self,
@@ -100,11 +111,11 @@ class PGRoleRetriever(BaseRetriever):
             .embedding
         )
         params = {
-            "query_text": query,
+            "query_text": '"' + query + '"',
             "bm25_limit": self._bm25_limit,
-            "query_embedding": str(query_embedding),  # pgvector expects a string
+            "embedding": query_embedding,  # pgvector expects a string
             "vector_limit": self._vector_limit,
-            "user_roles": user_roles,
+            "access_roles": user_roles,
             "final_limit": max(self._bm25_limit, self._vector_limit),
         }
 

@@ -1,7 +1,7 @@
 import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ARRAY, TIMESTAMP, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, TIMESTAMP, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -40,3 +40,21 @@ class DocumentChunk(Base):
 
     # Establish the many-to-one relationship
     document: Mapped["Document"] = relationship(back_populates="chunks")
+
+
+Index("idx_documents_access_roles", Document.access_roles, postgresql_using="gin")
+Index(
+    "idx_document_chunks_embedding",
+    DocumentChunk.embedding,
+    postgresql_using="hnsw",
+    postgresql_with={"m": 16, "ef_construction": 64},
+    postgresql_ops={"embedding": "vector_cosine_ops"},
+)
+
+Index(
+    "search_idx",
+    DocumentChunk.chunk_text,
+    postgresql_using="bm25",
+    postgresql_with={"key_field": "id"},
+    postgresql_ops=["id", "chunk_text", "page_number", "created_at"],
+)

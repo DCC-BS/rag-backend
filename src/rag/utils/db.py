@@ -8,4 +8,5 @@ def get_db_url():
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "mydatabase")
-    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
+    db_url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
+    return db_url

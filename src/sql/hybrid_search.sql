@@ -11,7 +11,7 @@ WITH bm25_ranked AS (
       LIMIT 20
     ) AS bm25_score
 ),
-semantic_search AS (
+semantic_ranked AS (
     SELECT id, RANK() OVER (ORDER BY embedding <=> '[1,2,3]') AS rank
     FROM document_chunks
     ORDER BY embedding <=> '[1,2,3]'
