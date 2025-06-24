@@ -7,7 +7,7 @@ services:
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
     ports:
-      - "8080:8080"
+      - "8080:${BACKEND_PORT}"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -17,6 +17,9 @@ services:
       - LLM_URL=http://llm:8000/v1
       - RERANKER_URL=http://reranker:8000
       - EMBEDDING_URL=http://embedding:8000/v1
+      - BACKEND_PORT=${BACKEND_PORT}
+      - BACKEND_HOST=${BACKEND_HOST}
+      - BACKEND_DEV=${BACKEND_DEV}
     depends_on:
       paradedb:
         condition: service_healthy

@@ -96,4 +96,7 @@ async def chat(
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)  # noqa: S104
+    host: str = os.environ.get("HOST", "127.0.0.1")
+    port: int = int(os.environ.get("PORT", "8080"))
+    reload: bool = os.environ.get("DEV", "False").lower() == "true"
+    uvicorn.run(app, host=host, port=port, reload=reload)

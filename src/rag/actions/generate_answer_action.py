@@ -22,6 +22,7 @@ class GenerateAnswerAction(ActionProtocol):
         "You are given a question and a context of documents that are relevant to the question. "
         "You are to answer the question based on the context and the conversation history. "
         "If you don't know the answer, say 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.' "
+        "If there are no documents available, say 'Entschuldigung, ich konnte keine relevanten Dokumente finden.' "
         "Don't try to make up an answer. "
         "Answer in German. "
         "For each statement in your answer, cite the source document id by adding it in brackets at the end of the sentence or paragraph like this: [file_id]"
