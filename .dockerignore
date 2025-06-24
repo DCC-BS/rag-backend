@@ -1,0 +1,12 @@
+.venv
+.cursor
+.github
+.vscode
+lancedb
+tests
+renovate.json
+tox.ini
+.ruff_cache
+Makefile
+codecov.yml
+.git
