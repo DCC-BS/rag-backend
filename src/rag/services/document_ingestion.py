@@ -1,9 +1,8 @@
 import asyncio
-import hashlib
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, override
+from typing import Any
 
 import structlog
 from openai import Client
@@ -36,8 +35,7 @@ class DocumentIngestionService:
         self.embedding_client: Client = Client(
             base_url=self.config.EMBEDDINGS.API_URL, api_key=os.getenv("OPENAI_API_KEY", "none")
         )
-        model_data = self.embedding_client.models.list().data
-        self.embedding_model: str = (model_data[0].id if model_data else None) or "Qwen/Qwen3-Embedding-0.6B"
+        self.embedding_model: str = self._get_embedding_model()
 
         self.observer = Observer()
         self.event_handler = None  # Will be initialized later
@@ -48,20 +46,16 @@ class DocumentIngestionService:
             "by_role": defaultdict(int),
         }
 
-    def get_file_hash(self, file_path: Path) -> str:
-        """Calculate SHA256 hash of a file.
+    def _get_embedding_model(self) -> str:
+        """Get the embedding model ID from the embedding service."""
+        try:
+            model_data = self.embedding_client.models.list().data
+            if model_data:
+                return model_data[0].id
+        except Exception:
+            self.logger.exception("Could not determine embedding model from client, falling back to default.")
 
-        Args:
-            file_path: Path to the file
-
-        Returns:
-            SHA256 hash string
-        """
-        sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(chunk)
-        return sha256_hash.hexdigest()
+        return "Qwen/Qwen3-Embedding-0.6B"
 
     def get_access_role_from_path(self, file_path: Path, data_dir: Path) -> str:
         """Extract access role from file path based on directory structure.
@@ -124,20 +118,40 @@ class DocumentIngestionService:
             self.logger.exception("Failed to create embeddings", error=str(e))
             raise
 
+    def _store_document_and_chunks(
+        self, session: Session, file_path: Path, access_role: str, chunks: list[Any], embeddings: list[list[float]]
+    ) -> None:
+        """Store a document and its chunks in the database."""
+        # Create document record
+        document = Document(
+            file_name=file_path.name,
+            document_path=str(file_path),
+            mime_type=chunks[0].metadata.get("mimetype", "unknown"),
+            num_pages=len({chunk.metadata.get("page_number") for chunk in chunks if chunk.metadata.get("page_number")}),
+            access_roles=[access_role],
+        )
+        session.add(document)
+        session.flush()  # Get the document ID
+
+        # Create document chunks
+        for chunk, embedding in zip(chunks, embeddings, strict=False):
+            doc_chunk = DocumentChunk(
+                document_id=document.id,
+                chunk_text=chunk.page_content,
+                embedding=embedding,
+                page_number=chunk.metadata.get("page_number"),
+            )
+            session.add(doc_chunk)
+
+        session.commit()
+        self.logger.info(f"Successfully stored document {file_path} with {len(chunks)} chunks")
+
     def process_document(self, file_path: Path, access_role: str) -> None:
-        """Process a single document: extract text, create chunks, embeddings, and store in DB.
-
-        Args:
-            file_path: Path to the document file
-            access_role: Access role for the document
-        """
+        """Process a single document: extract text, create chunks, embeddings, and store in DB."""
         try:
-            self.logger.info(f"Processing document: {file_path}")
+            self.logger.debug(f"Starting processing for document: {file_path}")
 
-            # Load and process document
             loader = DoclingLoader(file_path=str(file_path), organization=access_role)
-
-            # Get all chunks from the document
             chunks = list(loader.lazy_load())
             if not chunks:
                 self.logger.warning(f"No chunks extracted from {file_path}")
@@ -145,37 +159,11 @@ class DocumentIngestionService:
 
             self.logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
 
-            # Create embeddings for all chunks
             chunk_texts = [chunk.page_content for chunk in chunks]
             embeddings = self.create_embeddings(chunk_texts)
 
-            # Store in database
             with Session(self.engine) as session:
-                # Create document record
-                document = Document(
-                    file_name=file_path.name,
-                    document_path=str(file_path),
-                    mime_type=chunks[0].metadata.get("mimetype", "unknown"),
-                    num_pages=len({
-                        chunk.metadata.get("page_number") for chunk in chunks if chunk.metadata.get("page_number")
-                    }),
-                    access_roles=[access_role],
-                )
-                session.add(document)
-                session.flush()  # Get the document ID
-
-                # Create document chunks
-                for chunk, embedding in zip(chunks, embeddings, strict=False):
-                    doc_chunk = DocumentChunk(
-                        document_id=document.id,
-                        chunk_text=chunk.page_content,
-                        embedding=embedding,
-                        page_number=chunk.metadata.get("page_number"),
-                    )
-                    session.add(doc_chunk)
-
-                session.commit()
-                self.logger.info(f"Successfully stored document {file_path} with {len(chunks)} chunks")
+                self._store_document_and_chunks(session, file_path, access_role, chunks, embeddings)
 
         except Exception as e:
             self.logger.exception(f"Failed to process document {file_path}", error=str(e))
@@ -209,42 +197,42 @@ class DocumentIngestionService:
             self.logger.exception(f"Failed to delete document {document_path}", error=str(e))
             raise
 
-    def process_file(self, file_path: Path) -> None:
-        """Process a single file: check if new/updated and process accordingly.
+    def _handle_document_update(self, file_path: Path, access_role: str) -> None:
+        self.logger.info(f"Document {file_path} needs update")
+        self.delete_document(str(file_path))
+        self.process_document(file_path, access_role)
+        self.stats["updated"] += 1
+        self.stats["by_role"][access_role] += 1
 
-        Args:
-            file_path: Path to the file to process
-        """
+    def _handle_new_document(self, file_path: Path, access_role: str) -> None:
+        self.logger.info(f"New document found: {file_path}")
+        self.process_document(file_path, access_role)
+        self.stats["new"] += 1
+        self.stats["by_role"][access_role] += 1
+
+    def process_file(self, file_path: Path) -> None:
+        """Process a single file: check if new/updated and process accordingly."""
         if not file_path.exists() or not file_path.is_file():
+            self.logger.debug(f"File not found or is not a file: {file_path}")
             return
 
         # Skip unsupported file types
         if file_path.suffix.lower() not in DoclingLoader.SUPPORTED_FORMATS:
+            self.logger.debug(f"Skipping unsupported file type: {file_path}")
             return
 
+        document_path = str(file_path)
         data_dir = Path(self.config.INGESTION.DATA_DIR)
         access_role = self.get_access_role_from_path(file_path, data_dir)
-        document_path = str(file_path)
-
-        # Check if document exists
         existing_document = self.check_document_exists(document_path)
 
         if existing_document:
-            # Check if document needs update
             if self.need_document_update(existing_document, file_path):
-                self.logger.info(f"Document {file_path} needs update")
-                self.delete_document(document_path)
-                self.process_document(file_path, access_role)
-                self.stats["updated"] += 1
-                self.stats["by_role"][access_role] += 1
+                self._handle_document_update(file_path, access_role)
             else:
                 self.logger.debug(f"Document {file_path} is up to date")
         else:
-            # New document
-            self.logger.info(f"New document found: {file_path}")
-            self.process_document(file_path, access_role)
-            self.stats["new"] += 1
-            self.stats["by_role"][access_role] += 1
+            self._handle_new_document(file_path, access_role)
 
     def scan_directory(self, directory: Path) -> None:
         """Scan a directory for documents and process them.
@@ -362,7 +350,6 @@ class DocumentFileHandler(FileSystemEventHandler):
         self.logger = structlog.get_logger()
         super().__init__()
 
-    @override
     def on_created(self, event: Any) -> None:
         """Handle file creation events."""
         if not event.is_directory:
@@ -370,7 +357,6 @@ class DocumentFileHandler(FileSystemEventHandler):
             self.logger.info(f"File created: {file_path}")
             self.ingestion_service.process_file(file_path)
 
-    @override
     def on_modified(self, event: Any) -> None:
         """Handle file modification events."""
         if not event.is_directory:
@@ -378,7 +364,6 @@ class DocumentFileHandler(FileSystemEventHandler):
             self.logger.info(f"File modified: {file_path}")
             self.ingestion_service.process_file(file_path)
 
-    @override
     def on_deleted(self, event: Any) -> None:
         """Handle file deletion events."""
         if not event.is_directory:
