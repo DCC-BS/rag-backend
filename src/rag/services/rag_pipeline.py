@@ -13,6 +13,7 @@ from pydantic import SecretStr
 
 from rag.actions.backoff_action import BackoffAction
 from rag.actions.generate_answer_action import GenerateAnswerAction
+from rag.actions.grade_answer_action import GradeAnswerAction
 from rag.actions.retrieve_action import RetrieveAction, RetrieverProtocol
 from rag.actions.route_question_action import RouteQuestionAction
 from rag.connectors.pg_retriever import PGRoleRetriever
@@ -43,7 +44,7 @@ class SHRAGPipeline:
         self.route_question_action: RouteQuestionAction = RouteQuestionAction(llm=self.llm)
         self.retrieve_action: RetrieveAction = RetrieveAction(retriever=self.retriever)
         # self.grade_hallucination_action: GradeHallucinationAction = GradeHallucinationAction(llm=self.llm)
-        # self.grade_answer_action: GradeAnswerAction = GradeAnswerAction(llm=self.llm)
+        self.grade_answer_action: GradeAnswerAction = GradeAnswerAction(llm=self.llm)
         self.generate_answer_action: GenerateAnswerAction = GenerateAnswerAction(llm=self.llm)
         self.backoff_action: BackoffAction = BackoffAction()
 
@@ -69,16 +70,16 @@ class SHRAGPipeline:
         _ = workflow.add_node("route_question", self.route_question_action)
         _ = workflow.add_node("retrieve", self.retrieve_action)
         # _ = workflow.add_node("grade_hallucination", self.grade_hallucination_action)
-        # _ = workflow.add_node("grade_answer", self.grade_answer_action)
+        _ = workflow.add_node("grade_answer", self.grade_answer_action)
         _ = workflow.add_node("generate_answer", self.generate_answer_action)
         _ = workflow.add_node("backoff", self.backoff_action)
 
         # Add conditional edge based on skip_retrieval
         _ = workflow.add_edge(start_key=START, end_key="route_question")
         # _ = workflow.add_edge(start_key="retrieve", end_key="generate_answer")
-        _ = workflow.add_edge(start_key="generate_answer", end_key=END)
-        # _ = workflow.add_edge(start_key="generate_answer", end_key="grade_hallucination")
-        # _ = workflow.add_edge(start_key="grade_answer", end_key=END)
+        # _ = workflow.add_edge(start_key="generate_answer", end_key=END)
+        _ = workflow.add_edge(start_key="generate_answer", end_key="grade_answer")
+        _ = workflow.add_edge(start_key="grade_answer", end_key=END)
         _ = workflow.add_edge(start_key="backoff", end_key=END)
 
         # Add conditional edges for routing and grading
