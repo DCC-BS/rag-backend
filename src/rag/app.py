@@ -96,7 +96,7 @@ async def chat(
 
 
 if __name__ == "__main__":
-    host: str = os.environ.get("HOST", "127.0.0.1")
-    port: int = int(os.environ.get("PORT", "8080"))
-    reload: bool = os.environ.get("DEV", "False").lower() == "true"
-    uvicorn.run(app, host=host, port=port, reload=reload)
+    host: str = os.environ.get("BACKEND_HOST", "127.0.0.1")
+    port: int = int(os.environ.get("BACKEND_PORT", "8080"))
+    reload: bool = os.environ.get("BACKEND_DEV", "False").lower() == "true"
+    uvicorn.run("src.rag.app:app", host=host, port=port, reload=reload)

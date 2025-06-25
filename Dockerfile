@@ -18,4 +18,4 @@ RUN uv sync --frozen
 COPY ./entrypoint.sh /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-CMD ["uv", "run", "src/rag/app.py"]
+CMD ["/bin/sh", "-c", "uv run fastapi dev src/rag/app.py --port ${BACKEND_PORT} --host ${BACKEND_HOST}"]

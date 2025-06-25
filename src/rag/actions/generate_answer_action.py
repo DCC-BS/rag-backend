@@ -20,14 +20,35 @@ class GenerateAnswerAction(ActionProtocol):
     system_prompt: str = (
         "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
         "You are given a question and a context of documents that are relevant to the question. "
-        "You are to answer the question based on the context and the conversation history. "
+        "You are to answer the question based on the context and the conversation history. \n"
         "If you don't know the answer, say 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.' "
         "If there are no documents available, say 'Entschuldigung, ich konnte keine relevanten Dokumente finden.' "
         "Don't try to make up an answer. "
-        "Answer in German. "
-        "For each statement in your answer, cite the source document id by adding it in brackets at the end of the sentence or paragraph like this: [file_id]"
-        "If multiple documents support a statement, include all relevant citations like [file_id_1][file_id_2][file_id_3]"
-        "Only cite documents that directly support your statements."
+        "Answer in German. \n"
+        "Use markdown formatting for your answer. \n"
+        "For each statement in your answer, cite the source document id by enclosing it in square brackets at the end of the sentence or paragraph like this: [file_id] \n"
+        "If multiple documents support a statement, include all relevant citations like [file_id_1, file_id_2, file_id_3]\n"
+        "Only cite documents that directly support your statements. \n\n"
+        "Example:\n"
+        "Context:\n"
+        "<document>\n"
+        "<content>"
+        "Die Haftpflichtversicherung ist eine Versicherung, die die Haftpflicht für die Versicherungsnehmer abdeckt.\n"
+        "</content>\n"
+        "<file_id>"
+        "1"
+        "</file_id>\n"
+        "</document>\n"
+        "<document>\n"
+        "<content>"
+        "In der Schweiz gilt die Versicherungspflicht. Das bedeutet, dass jeder Mensch, der in der Schweiz lebt, eine Krankenversicherung haben muss."
+        "</content>\n"
+        "<file_id>"
+        "2"
+        "</file_id>\n"
+        "</document>\n\n"
+        "Question: Was ist die Haftpflichtversicherung?\n"
+        "Answer: Die Haftpflichtversicherung ist eine Versicherung, die die Haftpflicht für die Versicherungsnehmer abdeckt[1]. "
     )
 
     def __init__(self, llm: ChatOpenAI) -> None:
@@ -49,26 +70,27 @@ class GenerateAnswerAction(ActionProtocol):
         if not state["messages"]:
             state["messages"] = [SystemMessage(content=self.system_prompt)]
 
-        # Format context with document metadata for citations
-        formatted_context: list[str] = []
-        for idx, doc in enumerate(state["context"]):  # pyright: ignore[reportOptionalIterable]
-            formatted_context.append(
-                f"""
-                <document>
-                <content>
-                {doc.page_content}
-                </content>
-                <file_id>
-                {idx + 1}
-                </file_id>
-                </document>
-                """
-            )
+        context: str = ""
+        if state["route_query"] and state["route_query"] == "retrieval":
+            formatted_context: list[str] = []
+            for idx, doc in enumerate(state["context"]):  # pyright: ignore[reportOptionalIterable]
+                formatted_context.append(
+                    f"""
+                    <document>
+                    <content>
+                    {doc.page_content}
+                    </content>
+                    <file_id>
+                    [{idx + 1}]
+                    </file_id>
+                    </document>
+                    """
+                )
 
-        context: str = "\n\n".join(formatted_context)
+            context = "\n\n".join(formatted_context)
 
         template = ChatPromptTemplate([
-            ("user", "Context: {context}\n\nQuestion: {input}"),
+            ("user", "Context: {context}\n\nQuestion: {input} \nothink"),
         ])
         prompt = template.invoke({"context": context, "input": state["input"]}, config)
         messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())

@@ -2,10 +2,6 @@ services:
   rag-backend:
     build: .
     container_name: rag-backend
-    volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
     ports:
       - "8080:${BACKEND_PORT}"
     environment:
@@ -20,6 +16,20 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
       - BACKEND_DEV=${BACKEND_DEV}
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - .venv/
+            - .git/
+        - action: rebuild
+          path: ./pyproject.toml
+        - action: restart
+          path: ./.env
+        - action: restart
+          path: ./Dockerfile
     depends_on:
       paradedb:
         condition: service_healthy
@@ -93,7 +103,7 @@ services:
 
   llm:
     image: vllm/vllm-openai:v0.9.1
-    container_name: vllm_qwen3_32b
+    container_name: vllm-qwen3-32b
     deploy:
       resources:
         reservations:
@@ -144,7 +154,7 @@ services:
 
   reranker:
     image: vllm/vllm-openai:v0.9.1
-    container_name: vllm_reranker
+    container_name: vllm-reranker
     deploy:
       resources:
         reservations:
@@ -166,9 +176,6 @@ services:
       - "Qwen/Qwen3-Reranker-0.6B"
       - "--task=score"
       - "--gpu-memory-utilization=0.15"
-      - "--uvicorn-log-level"
-      - "warning"
-      - "--disable-log-requests"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -181,7 +188,7 @@ services:
 
   embedding:
     image: vllm/vllm-openai:v0.9.1
-    container_name: vllm_embedding
+    container_name: vllm-embedding
     deploy:
       resources:
         reservations:
@@ -203,9 +210,6 @@ services:
       - "Qwen/Qwen3-Embedding-0.6B"
       - "--task=embedding"
       - "--gpu-memory-utilization=0.15"
-      - "--uvicorn-log-level"
-      - "warning"
-      - "--disable-log-requests"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

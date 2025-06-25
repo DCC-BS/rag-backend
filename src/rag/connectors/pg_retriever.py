@@ -137,6 +137,26 @@ class PGRoleRetriever(BaseRetriever):
                 chunks_by_id[cid] for cid in ordered_chunk_ids if cid in chunks_by_id
             ]
 
+        # TODO: Right now vllm reranker is not working, so we just return the ordered chunks
+        reranked_docs: list[LangChainDocument] = [
+            LangChainDocument(
+                page_content=chunk.chunk_text,
+                metadata={
+                    "file_name": chunk.document.file_name,
+                    "document_path": chunk.document.document_path,
+                    "mime_type": chunk.document.mime_type,
+                    "page": chunk.page_number,
+                    "num_pages": chunk.document.num_pages,
+                    "access_roles": chunk.document.access_roles,
+                    "created_at": chunk.document.created_at.isoformat(),
+                    "id": chunk.document.id,
+                    "chunk_id": chunk.id,
+                },
+            )
+            for chunk in ordered_chunks
+        ]
+        return reranked_docs[: self._rerank_top_k]
+
         docs_to_rerank: list[str] = [chunk.chunk_text for chunk in ordered_chunks]
 
         reranked_docs_result: V2RerankResponse = self._reranker_client.rerank(
