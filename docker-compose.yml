@@ -16,6 +16,9 @@ services:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
       - BACKEND_DEV=${BACKEND_DEV}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ENDPOINT=http://minio:9000
     develop:
       watch:
         - action: sync
@@ -48,7 +51,6 @@ services:
     container_name: rag-ingestion
     volumes:
       - ./src:/app/src
-      - ./data:/app/data
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
     deploy:
@@ -67,12 +69,17 @@ services:
       - LLM_URL=http://llm:8000/v1
       - RERANKER_URL=http://reranker:8000
       - EMBEDDING_URL=http://embedding:8000/v1
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ENDPOINT=http://minio:9000
     command: ["uv", "run", "src/rag/cli/run_ingestion.py"]
     depends_on:
       paradedb:
         condition: service_healthy
       embedding:
         condition: service_healthy
+      minio:
+        condition: service_started
       rag-backend:
         condition: service_started
     restart: unless-stopped
@@ -220,9 +227,25 @@ services:
     networks:
       - rag-network
 
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: always
+    networks:
+      - rag-network
+
 volumes:
   paradedb_data:
-
+  minio_data:
 networks:
   rag-network:
     driver: bridge

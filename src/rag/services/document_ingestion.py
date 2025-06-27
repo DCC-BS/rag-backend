@@ -1,27 +1,29 @@
 import asyncio
 import os
+import tempfile
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import structlog
+from botocore.exceptions import ClientError
 from openai import Client
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, selectinload
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
 
 from rag.connectors.docling_loader import DoclingLoader
 from rag.models.document import Document, DocumentChunk
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
+from rag.utils.s3 import S3DocumentTagger, S3FileClassifier, S3Utils
 
 
-class DocumentIngestionService:
-    """Service for ingesting documents into the database with embeddings."""
+class S3DocumentIngestionService:
+    """Service for ingesting documents from S3/MinIO storage into the database with embeddings."""
 
     def __init__(self, config: AppConfig | None = None) -> None:
-        """Initialize the document ingestion service.
+        """Initialize the S3 document ingestion service.
 
         Args:
             config: Application configuration object
@@ -37,12 +39,21 @@ class DocumentIngestionService:
         )
         self.embedding_model: str = self._get_embedding_model()
 
-        self.observer = Observer()
-        self.event_handler = None  # Will be initialized later
+        # S3 utilities setup
+        self.s3_utils = S3Utils(config)
+        self.s3_tagger = S3DocumentTagger(self.s3_utils, config)
+        self.file_classifier = S3FileClassifier()
+
+        # Statistics tracking
         self.stats: dict[str, Any] = {
             "new": 0,
             "updated": 0,
             "deleted": 0,
+            "symlinks_removed": 0,
+            "temp_files_removed": 0,
+            "not_supported": 0,
+            "no_chunks": 0,
+            "unprocessable": 0,
             "by_role": defaultdict(int),
         }
 
@@ -54,63 +65,58 @@ class DocumentIngestionService:
                 return model_data[0].id
         except Exception:
             self.logger.exception("Could not determine embedding model from client, falling back to default.")
-
         return "Qwen/Qwen3-Embedding-0.6B"
 
-    def get_access_role_from_path(self, file_path: Path, data_dir: Path) -> str:
-        """Extract access role from file path based on directory structure.
+    def _update_stats(self, stat_key: str, access_role: str | None = None) -> None:
+        """Update statistics counters."""
+        self.stats[stat_key] += 1
+        if access_role:
+            self.stats["by_role"][access_role] += 1
 
-        Args:
-            file_path: Path to the file
-            data_dir: Base data directory path
+    def _reset_stats(self) -> None:
+        """Reset all statistics counters."""
+        self.stats["new"] = 0
+        self.stats["updated"] = 0
+        self.stats["symlinks_removed"] = 0
+        self.stats["temp_files_removed"] = 0
+        self.stats["not_supported"] = 0
+        self.stats["no_chunks"] = 0
+        self.stats["unprocessable"] = 0
+        self.stats["by_role"].clear()
 
-        Returns:
-            Access role string
-        """
-        try:
-            relative_path = file_path.relative_to(data_dir)
-            # First directory level determines the access role
-            return relative_path.parts[0]
-        except ValueError:
-            self.logger.warning(f"File {file_path} is not under data directory {data_dir}")
-            return "unknown"
+    def _is_symlink_file(self, object_key: str) -> bool:
+        """Check if the file appears to be a symlink based on the filename."""
+        return self.file_classifier.is_symlink_file(object_key)
+
+    def _is_temp_office_file(self, object_key: str) -> bool:
+        """Check if the file is a temporary MS Office file."""
+        return self.file_classifier.is_temp_office_file(object_key)
+
+    def _delete_s3_object(self, bucket_name: str, object_key: str) -> None:
+        """Delete an object from S3."""
+        self.s3_utils.delete_s3_object(bucket_name, object_key)
+
+    def _is_supported_file_type(self, object_key: str) -> bool:
+        """Check if the file type is supported by the processing pipeline."""
+        return self.file_classifier.is_supported_file_type(object_key, DoclingLoader.SUPPORTED_FORMATS)
+
+    def _get_document_path(self, bucket_name: str, object_key: str) -> str:
+        """Generate a consistent document path identifier."""
+        return self.s3_utils.format_s3_path(bucket_name, object_key)
 
     def check_document_exists(self, document_path: str) -> Document | None:
-        """Check if document exists in database.
-
-        Args:
-            document_path: Path to the document
-
-        Returns:
-            Document object if exists, None otherwise
-        """
+        """Check if document exists in database."""
         with Session(self.engine) as session:
             statement = select(Document).where(Document.document_path == document_path)
             return session.execute(statement).scalar_one_or_none()
 
-    def need_document_update(self, document: Document, file_path: Path) -> bool:
-        """Check if document needs to be updated based on file modification.
-
-        Args:
-            document: Existing document object
-            file_path: Path to the file
-
-        Returns:
-            True if document needs update, False otherwise
-        """
-        file_modified_time = file_path.stat().st_mtime
-        doc_created_time = document.created_at.timestamp()
-        return file_modified_time > doc_created_time
+    def need_document_update(self, document: Document, last_modified: datetime) -> bool:
+        """Check if document needs to be updated based on S3 last modified time."""
+        doc_created_time = document.created_at.replace(tzinfo=UTC)
+        return last_modified > doc_created_time
 
     def create_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Create embeddings for a list of texts.
-
-        Args:
-            texts: List of text strings
-
-        Returns:
-            List of embedding vectors
-        """
+        """Create embeddings for a list of texts."""
         try:
             response = self.embedding_client.embeddings.create(input=texts, model=self.embedding_model)
             return [data.embedding for data in response.data]
@@ -118,14 +124,26 @@ class DocumentIngestionService:
             self.logger.exception("Failed to create embeddings", error=str(e))
             raise
 
+    def _download_s3_object(self, bucket_name: str, object_key: str) -> bytes:
+        """Download an S3 object and return its content."""
+        return self.s3_utils.download_s3_object(bucket_name, object_key)
+
     def _store_document_and_chunks(
-        self, session: Session, file_path: Path, access_role: str, chunks: list[Any], embeddings: list[list[float]]
+        self,
+        session: Session,
+        bucket_name: str,
+        object_key: str,
+        access_role: str,
+        chunks: list[Any],
+        embeddings: list[list[float]],
     ) -> None:
         """Store a document and its chunks in the database."""
+        document_path = self._get_document_path(bucket_name, object_key)
+
         # Create document record
         document = Document(
-            file_name=file_path.name,
-            document_path=str(file_path),
+            file_name=Path(object_key).name,
+            document_path=document_path,
             mime_type=chunks[0].metadata.get("mimetype", "unknown"),
             num_pages=len({chunk.metadata.get("page_number") for chunk in chunks if chunk.metadata.get("page_number")}),
             access_roles=[access_role],
@@ -144,37 +162,243 @@ class DocumentIngestionService:
             session.add(doc_chunk)
 
         session.commit()
-        self.logger.info(f"Successfully stored document {file_path} with {len(chunks)} chunks")
+        self.logger.info(f"Successfully stored document {object_key} with {len(chunks)} chunks")
 
-    def process_document(self, file_path: Path, access_role: str) -> None:
-        """Process a single document: extract text, create chunks, embeddings, and store in DB."""
-        try:
-            self.logger.debug(f"Starting processing for document: {file_path}")
+    def _should_process_file(self, bucket_name: str, object_key: str) -> bool:
+        """Check if a file should be processed based on type and filters."""
+        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
 
-            loader = DoclingLoader(file_path=str(file_path), organization=access_role)
-            chunks = list(loader.lazy_load())
-            if not chunks:
-                self.logger.warning(f"No chunks extracted from {file_path}")
+        # Check for symlinks and remove them
+        if self._is_symlink_file(object_key):
+            self.logger.info(f"Removing symlink file: {s3_path}")
+            self._delete_s3_object(bucket_name, object_key)
+            self._update_stats("symlinks_removed")
+            return False
+
+        # Check for temporary MS Office files and remove them
+        if self._is_temp_office_file(object_key):
+            self.logger.info(f"Removing temporary MS Office file: {s3_path}")
+            self._delete_s3_object(bucket_name, object_key)
+            self._update_stats("temp_files_removed")
+            return False
+
+        # Check if file type is supported
+        if not self._is_supported_file_type(object_key):
+            self.logger.debug(f"Unsupported file type: {s3_path}")
+            # Only tag if not already tagged with an error
+            if not self.s3_tagger.has_error_tag(bucket_name, object_key):
+                self.s3_tagger.add_error_tag(
+                    bucket_name,
+                    object_key,
+                    self.config.INGESTION.NOT_SUPPORTED_FILE_TAG,
+                    "File type not supported by processing pipeline",
+                )
+                self._update_stats("not_supported")
+            return False
+
+        return True
+
+    def process_s3_object(self, bucket_name: str, object_key: str, last_modified: datetime) -> None:
+        """Process a single S3 object: check if new/updated and process accordingly."""
+        # Check if file should be processed (handles filtering and cleanup)
+        if not self._should_process_file(bucket_name, object_key):
+            return
+
+        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
+
+        # Extract access role from bucket name
+        access_role = self.s3_utils.extract_access_role_from_bucket(bucket_name)
+        if not access_role:
+            return
+
+        document_path = self._get_document_path(bucket_name, object_key)
+        existing_document = self.check_document_exists(document_path)
+
+        # Check if already processed or has error tags (unless we have a database record)
+        if not existing_document:
+            if self.s3_tagger.is_document_processed(bucket_name, object_key):
+                self.logger.debug(f"Document {s3_path} already processed")
+                return
+            if self.s3_tagger.has_error_tag(bucket_name, object_key):
+                self.logger.debug(f"Document {s3_path} already has error tag")
                 return
 
-            self.logger.info(f"Extracted {len(chunks)} chunks from {file_path}")
+        if existing_document:
+            if self.need_document_update(existing_document, last_modified):
+                self._handle_document_update(bucket_name, object_key, access_role)
+            else:
+                self.logger.debug(f"Document {s3_path} is up to date")
+        else:
+            self._handle_new_document(bucket_name, object_key, access_role)
 
-            chunk_texts = [chunk.page_content for chunk in chunks]
-            embeddings = self.create_embeddings(chunk_texts)
+    def scan_bucket(self, bucket_name: str) -> None:
+        """Scan a bucket for documents and process them."""
+        self.logger.info(f"Scanning S3 bucket: {bucket_name}")
 
-            with Session(self.engine) as session:
-                self._store_document_and_chunks(session, file_path, access_role, chunks, embeddings)
+        try:
+            paginator = self.s3_utils.s3_client.get_paginator("list_objects_v2")
+            page_iterator = paginator.paginate(Bucket=bucket_name)
+
+            objects_to_process = []
+            for page in page_iterator:
+                for obj in page.get("Contents", []):
+                    objects_to_process.append({"key": obj["Key"], "last_modified": obj["LastModified"]})
+
+            total_objects = len(objects_to_process)
+            self.logger.info(f"Found {total_objects} objects in bucket {bucket_name}")
+
+            for i, obj_info in enumerate(objects_to_process):
+                self.logger.info(f"Processing object {i + 1}/{total_objects}: {obj_info["key"]}")
+                self.process_s3_object(bucket_name, obj_info["key"], obj_info["last_modified"])
+
+        except ClientError as e:
+            self.logger.exception(f"Failed to scan bucket {bucket_name}", error=str(e))
+            raise
+
+    def log_statistics(self) -> None:
+        """Log the collected statistics."""
+        # Convert defaultdict to dict for cleaner logging
+        stats_to_log = self.stats.copy()
+        stats_to_log["by_role"] = dict(self.stats["by_role"])
+        self.logger.info(
+            "Ingestion statistics",
+            new_documents=stats_to_log["new"],
+            updated_documents=stats_to_log["updated"],
+            deleted_documents=stats_to_log["deleted"],
+            symlinks_removed=stats_to_log["symlinks_removed"],
+            temp_files_removed=stats_to_log["temp_files_removed"],
+            not_supported=stats_to_log["not_supported"],
+            no_chunks=stats_to_log["no_chunks"],
+            unprocessable=stats_to_log["unprocessable"],
+            roles=stats_to_log["by_role"],
+        )
+
+    def initial_scan(self) -> None:
+        """Perform initial scan of all S3 buckets for configured access roles."""
+        self.logger.info("Starting initial S3 document scan")
+
+        # Reset stats for the scan
+        self._reset_stats()
+
+        # Ensure buckets exist
+        self.s3_utils.ensure_buckets_exist_for_roles()
+
+        # Scan each bucket
+        for role in self.config.ROLES:
+            bucket_name = self.s3_utils.get_bucket_name(role)
+            self.scan_bucket(bucket_name)
+
+        self.log_statistics()
+        self.logger.info("Initial S3 document scan completed")
+
+    async def watch_s3_changes(self) -> None:
+        """Watch for S3 changes by periodically scanning buckets."""
+        self.logger.info("Starting S3 change monitoring")
+
+        while True:
+            try:
+                for role in self.config.ROLES:
+                    bucket_name = self.s3_utils.get_bucket_name(role)
+
+                    # Simple approach: scan for unprocessed objects
+                    paginator = self.s3_utils.s3_client.get_paginator("list_objects_v2")
+                    page_iterator = paginator.paginate(Bucket=bucket_name)
+
+                    for page in page_iterator:
+                        for obj in page.get("Contents", []):
+                            # Check if object is unprocessed and doesn't have error tags
+                            if not self.s3_tagger.is_document_processed(
+                                bucket_name, obj["Key"]
+                            ) and not self.s3_tagger.has_error_tag(bucket_name, obj["Key"]):
+                                s3_path = self.s3_utils.format_s3_path(bucket_name, obj["Key"])
+                                self.logger.info(f"Found unprocessed object: {s3_path}")
+                                self.process_s3_object(bucket_name, obj["Key"], obj["LastModified"])
+
+                # Wait before next scan
+                await asyncio.sleep(self.config.INGESTION.SCAN_INTERVAL)
+
+            except Exception as e:
+                self.logger.exception("Error during S3 change monitoring", error=str(e))
+                await asyncio.sleep(60)  # Wait before retrying
+
+    async def run(self) -> None:
+        """Run the S3 ingestion service."""
+        self.logger.info("Starting S3 document ingestion service")
+
+        try:
+            # Perform initial scan
+            self.initial_scan()
+
+            # Start change monitoring if enabled
+            if self.config.INGESTION.WATCH_ENABLED:
+                self.logger.info("S3 document ingestion service is running. Press Ctrl+C to stop.")
+                try:
+                    await self.watch_s3_changes()
+                except KeyboardInterrupt:
+                    self.logger.info("Received shutdown signal")
+            else:
+                self.logger.info("Watch mode disabled, exiting after initial scan")
 
         except Exception as e:
-            self.logger.exception(f"Failed to process document {file_path}", error=str(e))
+            self.logger.exception("S3 document ingestion service failed", error=str(e))
+            raise
+
+    def process_s3_document(self, bucket_name: str, object_key: str, access_role: str) -> None:
+        """Process a single S3 document: download, extract text, create chunks, embeddings, and store in DB."""
+        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
+        try:
+            self.logger.debug(f"Starting processing for S3 document: {s3_path}")
+
+            # Download the file content
+            file_content = self._download_s3_object(bucket_name, object_key)
+
+            # Create a temporary file for docling processing
+            with tempfile.NamedTemporaryFile(suffix=Path(object_key).suffix, delete=False) as tmp_file:
+                tmp_file.write(file_content)
+                tmp_file_path = tmp_file.name
+
+            try:
+                # Process with docling
+                loader = DoclingLoader(file_path=tmp_file_path, organization=access_role)
+                chunks = list(loader.lazy_load())
+
+                if not chunks:
+                    self.logger.warning(f"No chunks extracted from {s3_path}")
+                    self.s3_tagger.add_error_tag(
+                        bucket_name,
+                        object_key,
+                        self.config.INGESTION.NO_CHUNKS_TAG,
+                        "No chunks could be extracted from document",
+                    )
+                    self._update_stats("no_chunks")
+                    return
+
+                self.logger.info(f"Extracted {len(chunks)} chunks from {s3_path}")
+
+                # Create embeddings
+                chunk_texts = [chunk.page_content for chunk in chunks]
+                embeddings = self.create_embeddings(chunk_texts)
+
+                # Store in database
+                with Session(self.engine) as session:
+                    self._store_document_and_chunks(session, bucket_name, object_key, access_role, chunks, embeddings)
+
+                # Mark as processed
+                self.s3_tagger.mark_document_processed(bucket_name, object_key)
+
+            finally:
+                # Clean up temporary file
+                Path(tmp_file_path).unlink(missing_ok=True)
+
+        except Exception as e:
+            self.logger.exception(f"Failed to process S3 document {s3_path}", error=str(e))
+            # Tag as unprocessable for any other errors
+            self.s3_tagger.add_error_tag(bucket_name, object_key, self.config.INGESTION.UNPROCESSABLE_TAG, str(e))
+            self._update_stats("unprocessable")
             raise
 
     def delete_document(self, document_path: str) -> None:
-        """Delete a document and all its chunks from the database.
-
-        Args:
-            document_path: Path to the document
-        """
+        """Delete a document and all its chunks from the database."""
         try:
             with Session(self.engine) as session:
                 # Find the document
@@ -197,178 +421,27 @@ class DocumentIngestionService:
             self.logger.exception(f"Failed to delete document {document_path}", error=str(e))
             raise
 
-    def _handle_document_update(self, file_path: Path, access_role: str) -> None:
-        self.logger.info(f"Document {file_path} needs update")
-        self.delete_document(str(file_path))
-        self.process_document(file_path, access_role)
-        self.stats["updated"] += 1
-        self.stats["by_role"][access_role] += 1
+    def _handle_document_update(self, bucket_name: str, object_key: str, access_role: str) -> None:
+        """Handle updating an existing document."""
+        document_path = self._get_document_path(bucket_name, object_key)
+        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
+        self.logger.info(f"Document {s3_path} needs update")
 
-    def _handle_new_document(self, file_path: Path, access_role: str) -> None:
-        self.logger.info(f"New document found: {file_path}")
-        self.process_document(file_path, access_role)
-        self.stats["new"] += 1
-        self.stats["by_role"][access_role] += 1
+        # Remove processed tag and delete from database
+        self.s3_tagger.remove_processed_tag(bucket_name, object_key)
+        self.delete_document(document_path)
 
-    def process_file(self, file_path: Path) -> None:
-        """Process a single file: check if new/updated and process accordingly."""
-        if not file_path.exists() or not file_path.is_file():
-            self.logger.debug(f"File not found or is not a file: {file_path}")
-            return
+        # Reprocess the document
+        self.process_s3_document(bucket_name, object_key, access_role)
+        self._update_stats("updated", access_role)
 
-        # Skip unsupported file types
-        if file_path.suffix.lower() not in DoclingLoader.SUPPORTED_FORMATS:
-            self.logger.debug(f"Skipping unsupported file type: {file_path}")
-            return
-
-        document_path = str(file_path)
-        data_dir = Path(self.config.INGESTION.DATA_DIR)
-        access_role = self.get_access_role_from_path(file_path, data_dir)
-        existing_document = self.check_document_exists(document_path)
-
-        if existing_document:
-            if self.need_document_update(existing_document, file_path):
-                self._handle_document_update(file_path, access_role)
-            else:
-                self.logger.debug(f"Document {file_path} is up to date")
-        else:
-            self._handle_new_document(file_path, access_role)
-
-    def scan_directory(self, directory: Path) -> None:
-        """Scan a directory for documents and process them.
-
-        Args:
-            directory: Directory to scan
-        """
-        self.logger.info(f"Scanning directory: {directory}")
-
-        if not directory.exists():
-            self.logger.warning(f"Directory {directory} does not exist")
-            return
-
-        # Find all supported files
-        files_to_process = [
-            file_path
-            for file_path in directory.rglob("*")
-            if file_path.is_file() and file_path.suffix.lower() in DoclingLoader.SUPPORTED_FORMATS
-        ]
-        total_files = len(files_to_process)
-        self.logger.info(f"Found {total_files} documents to process.")
-
-        for i, file_path in enumerate(files_to_process):
-            self.logger.info(f"Processing document {i + 1}/{total_files}: {file_path}")
-            self.process_file(file_path)
-
-    def log_statistics(self) -> None:
-        """Log the collected statistics."""
-        # Convert defaultdict to dict for cleaner logging
-        stats_to_log = self.stats.copy()
-        stats_to_log["by_role"] = dict(self.stats["by_role"])
-        self.logger.info(
-            "Ingestion statistics",
-            new_documents=stats_to_log["new"],
-            updated_documents=stats_to_log["updated"],
-            deleted_documents=stats_to_log["deleted"],
-            roles=stats_to_log["by_role"],
-        )
-
-    def initial_scan(self) -> None:
-        """Perform initial scan of all configured data directories."""
-        self.logger.info("Starting initial document scan")
-        # Reset stats for the scan
-        self.stats["new"] = 0
-        self.stats["updated"] = 0
-        self.stats["by_role"].clear()
-
-        data_dir = Path(self.config.INGESTION.DATA_DIR)
-        if not data_dir.exists():
-            self.logger.error(f"Data directory {data_dir} does not exist")
-            return
-
-        self.scan_directory(data_dir)
-        self.log_statistics()
-        self.logger.info("Initial document scan completed")
-
-    def start_file_watcher(self) -> None:
-        """Start the file system watcher."""
-        data_dir = Path(self.config.INGESTION.DATA_DIR)
-        if not data_dir.exists():
-            self.logger.error(f"Data directory {data_dir} does not exist")
-            return
-
-        # Initialize event handler if not already done
-        if self.event_handler is None:
-            self.event_handler = DocumentFileHandler(self)
-
-        self.observer.schedule(self.event_handler, str(data_dir), recursive=True)
-        self.observer.start()
-        self.logger.info(f"Started file watcher for {data_dir}")
-
-    def stop_file_watcher(self) -> None:
-        """Stop the file system watcher."""
-        if self.observer.is_alive():
-            self.observer.stop()
-            self.observer.join()
-            self.logger.info("Stopped file watcher")
-
-    async def run(self) -> None:
-        """Run the ingestion service."""
-        self.logger.info("Starting document ingestion service")
-
-        try:
-            # Perform initial scan
-            self.initial_scan()
-
-            # Start file watcher
-            self.start_file_watcher()
-
-            # Keep the service running
-            self.logger.info("Document ingestion service is running. Press Ctrl+C to stop.")
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                self.logger.info("Received shutdown signal")
-            finally:
-                self.stop_file_watcher()
-
-        except Exception as e:
-            self.logger.exception("Document ingestion service failed", error=str(e))
-            raise
+    def _handle_new_document(self, bucket_name: str, object_key: str, access_role: str) -> None:
+        """Handle processing a new document."""
+        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
+        self.logger.info(f"New document found: {s3_path}")
+        self.process_s3_document(bucket_name, object_key, access_role)
+        self._update_stats("new", access_role)
 
 
-class DocumentFileHandler(FileSystemEventHandler):
-    """File system event handler for document changes."""
-
-    def __init__(self, ingestion_service: DocumentIngestionService) -> None:
-        """Initialize the file handler.
-
-        Args:
-            ingestion_service: Reference to the ingestion service
-        """
-        self.ingestion_service = ingestion_service
-        self.logger = structlog.get_logger()
-        super().__init__()
-
-    def on_created(self, event: Any) -> None:
-        """Handle file creation events."""
-        if not event.is_directory:
-            file_path = Path(event.src_path)
-            self.logger.info(f"File created: {file_path}")
-            self.ingestion_service.process_file(file_path)
-
-    def on_modified(self, event: Any) -> None:
-        """Handle file modification events."""
-        if not event.is_directory:
-            file_path = Path(event.src_path)
-            self.logger.info(f"File modified: {file_path}")
-            self.ingestion_service.process_file(file_path)
-
-    def on_deleted(self, event: Any) -> None:
-        """Handle file deletion events."""
-        if not event.is_directory:
-            file_path = event.src_path
-            self.logger.info(f"File deleted: {file_path}")
-            self.ingestion_service.delete_document(file_path)
-            self.ingestion_service.stats["deleted"] += 1
-            self.ingestion_service.log_statistics()
+# Alias for backward compatibility
+DocumentIngestionService = S3DocumentIngestionService

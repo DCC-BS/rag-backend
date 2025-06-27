@@ -1,5 +1,13 @@
 INGESTION:
-  DATA_DIR: "data"
+  STORAGE_TYPE: "s3"
+  S3_ENDPOINT: "${oc.env:MINIO_ENDPOINT}"
+  S3_ACCESS_KEY: "${oc.env:MINIO_ROOT_USER}"
+  S3_SECRET_KEY: "${oc.env:MINIO_ROOT_PASSWORD}"
+  BUCKET_PREFIX: "documents"
   WATCH_ENABLED: true
   BATCH_SIZE: 10
   SCAN_INTERVAL: 3600
+  PROCESSED_TAG: "ingestion_processed"
+  UNPROCESSABLE_TAG: "unprocessable"
+  NOT_SUPPORTED_FILE_TAG: "not_supported_file"
+  NO_CHUNKS_TAG: "no_chunks"

@@ -1,10 +1,4 @@
 ROLES:
-- admin
-- Documents.WSU.SH
-- Documents.WSU.ASB
-- Documents.WSU.EL
-DATA_DIR: "data"
-DOC_SOURCES:
-  Documents.WSU.SH: "${DATA_DIR}/SH"
-  Documents.WSU.ASB: "${DATA_DIR}/EL"
-  Documents.WSU.EL: "${DATA_DIR}/EL2"
+- SH
+- ASB
+- EL

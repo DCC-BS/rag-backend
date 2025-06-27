@@ -18,10 +18,11 @@ This is a template repository for Python projects that use uv for their dependen
 
 * **Embedding & Reranking Services**: Two separate services, likely hosted with vLLM, that provide machine learning models as APIs. The embedding service turns text into numerical vectors, and the reranking service re-orders retrieved results for maximum relevance.
 
-* **Document Ingestion Service**: An automated background worker that processes documents from the file system. It uses docling to extract text, chunks the content, calls the embedding service, and loads everything into the PostgreSQL database. Features include:
-  - Real-time file watching with automatic processing
+* **Document Ingestion Service**: An automated background worker that processes documents from S3/MinIO storage. It uses docling to extract text, chunks the content, calls the embedding service, and loads everything into the PostgreSQL database. Features include:
+  - S3/MinIO bucket monitoring with automatic processing
   - Support for PDF, DOCX, PPTX, HTML, and XLSX files
-  - Role-based access control derived from directory structure
+  - Bucket-based access control with role isolation
+  - Document state tracking using S3 object tags
   - Automatic embedding generation and database storage
   - Incremental updates and conflict resolution
 
@@ -51,10 +52,11 @@ graph TD
 
     subgraph "Offline: Data Ingestion Pipeline"
         direction TB
-        PDFs[<fa:fa-file-pdf> Source PDFs] --> Ingestion[<fa:fa-cogs> Ingestion Service]
-        Ingestion -->|Parse with Docling| EmbeddingService
+        S3Storage[<fa:fa-cloud> S3/MinIO Storage<br>Bucket per Role] --> Ingestion[<fa:fa-cogs> S3 Ingestion Service]
+        Ingestion -->|Download & Parse with Docling| EmbeddingService
         EmbeddingService -->|Create Embeddings| Ingestion
         Ingestion -->|Load Chunks & Vectors| PostgreSQL
+        Ingestion -->|Tag Processed Objects| S3Storage
     end
 
     style User fill:#D5E8D4,stroke:#82B366,stroke-width:2px

@@ -30,10 +30,11 @@ dependencies = [
     "pgvector>=0.4.1",
     "alembic>=1.16.2",
     "watchdog>=6.0.0",
+    "boto3>=1.38.44",
 ]
 
 [project.scripts]
-rag-ui = "rag.ui.cli:run_app"
+rag-upload-s3 = "rag.cli.upload_to_s3:main"
 
 [project.urls]
 Homepage = "https://DCC-BS.github.io/rag-application/"

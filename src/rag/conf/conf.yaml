@@ -1,14 +1,6 @@
 APP_NAME: "RAG Bot"
 VERSION: "0.0.1"
 DESCRIPTION: "A Retrieval-Augmented Generation (RAG) bot for document-based queries."
-DOC_STORE:
-  TYPE: "lancedb"
-  PATH: "lancedb"
-  TABLE_NAME: "documents"
-  MAX_CHUNK_SIZE: 3000
-  MIN_CHUNK_SIZE: 200
-  SPLIT_OVERLAP: 400
-  DOCUMENT_DESCRIPTION: "Guidelines, laws, and regulations from the Swiss Social Security System"
 RETRIEVER:
   BM25_LIMIT: 20
   VECTOR_LIMIT: 20

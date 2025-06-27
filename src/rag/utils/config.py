@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from omegaconf import MISSING, OmegaConf
+from omegaconf import OmegaConf
 
 
 @dataclass
@@ -54,10 +54,18 @@ class DoclingConfig:
 
 @dataclass
 class IngestionConfig:
-    DATA_DIR: str
+    STORAGE_TYPE: str
+    S3_ENDPOINT: str
+    S3_ACCESS_KEY: str
+    S3_SECRET_KEY: str
+    BUCKET_PREFIX: str = "documents"
     WATCH_ENABLED: bool = True
     BATCH_SIZE: int = 10
     SCAN_INTERVAL: int = 3600  # seconds
+    PROCESSED_TAG: str = "ingestion_processed"
+    UNPROCESSABLE_TAG: str = "unprocessable"
+    NO_CHUNKS_TAG: str = "no_chunks"
+    NOT_SUPPORTED_FILE_TAG: str = "not_supported_file"
 
 
 @dataclass
@@ -71,7 +79,6 @@ class AppConfig:
     APP_NAME: str
     VERSION: str
     DESCRIPTION: str
-    DOC_STORE: DocStoreConfig
     RETRIEVER: RetrieverConfig
     EMBEDDINGS: EmbeddingsConfig
     LLM: LLMConfig
@@ -80,8 +87,6 @@ class AppConfig:
     INGESTION: IngestionConfig
     CHAT: ChatConfig
     ROLES: list[str]
-    DATA_DIR: str
-    DOC_SOURCES: dict[str, str] = MISSING
 
 
 class ConfigurationManager:
