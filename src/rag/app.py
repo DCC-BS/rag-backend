@@ -5,13 +5,20 @@ from typing import Annotated, Any
 
 import structlog
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from rag.auth import get_current_user
+from rag.models.api_models import (
+    DeleteDocumentRequest,
+    DocumentListResponse,
+    DocumentMetadata,
+    DocumentOperationResponse,
+)
 from rag.models.user import User
+from rag.services.document_management import DocumentManagementService
 from rag.services.rag_pipeline import SHRAGPipeline
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
@@ -24,11 +31,16 @@ CONST_SPLIT_STRING = "\0"
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.pipeline = SHRAGPipeline()
+    app.state.document_service = DocumentManagementService()
     yield
 
 
 def get_pipeline(request: Request) -> SHRAGPipeline:
     return request.app.state.pipeline
+
+
+def get_document_service(request: Request) -> DocumentManagementService:
+    return request.app.state.document_service
 
 
 app: FastAPI = FastAPI(title="RAG API", lifespan=lifespan)
@@ -92,6 +104,94 @@ async def chat(
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+    )
+
+
+# Document Management Endpoints
+
+
+@app.get("/documents", response_model=DocumentListResponse)
+async def get_user_documents(
+    current_user: Annotated[User, Depends(get_current_user)],
+    document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+) -> DocumentListResponse:
+    """Get all documents accessible by the current user."""
+    documents_data = document_service.get_user_documents(current_user.organizations)
+    documents = [DocumentMetadata(**doc) for doc in documents_data]
+
+    return DocumentListResponse(documents=documents, total_count=len(documents))
+
+
+@app.get("/documents/{document_id}")
+async def get_document_by_id(
+    document_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+) -> Response:
+    """Get document content by ID."""
+    content = document_service.get_document_by_id(document_id, current_user.organizations)
+
+    # Return the file content as binary response
+    return Response(
+        content=content,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename=document_{document_id}"},
+    )
+
+
+@app.post("/documents", response_model=DocumentOperationResponse)
+async def upload_document(
+    access_role: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    current_user: Annotated[User, Depends(get_current_user)],
+    document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+) -> DocumentOperationResponse:
+    """Upload a new document to S3."""
+    result = document_service.upload_document(file, access_role, current_user.organizations)
+
+    return DocumentOperationResponse(
+        message=result["message"],
+        file_name=result.get("original_filename"),
+        additional_info={
+            "bucket_name": result["bucket_name"],
+            "object_key": result["object_key"],
+            "normalized_filename": result["normalized_filename"],
+            "size": result["size"],
+        },
+    )
+
+
+@app.put("/documents/{document_id}", response_model=DocumentOperationResponse)
+async def update_document(
+    document_id: int,
+    access_role: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    current_user: Annotated[User, Depends(get_current_user)],
+    document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+) -> DocumentOperationResponse:
+    """Update an existing document in S3."""
+    result = document_service.update_document(document_id, file, access_role, current_user.organizations)
+
+    return DocumentOperationResponse(
+        message=result["message"],
+        document_id=str(result["document_id"]),
+        file_name=result["file_name"],
+        additional_info={"original_filename": result["original_filename"], "size": result["size"]},
+    )
+
+
+@app.delete("/documents/{document_id}", response_model=DocumentOperationResponse)
+async def delete_document(
+    document_id: int,
+    delete_request: DeleteDocumentRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+) -> DocumentOperationResponse:
+    """Delete a document from S3 and database."""
+    result = document_service.delete_document(document_id, delete_request.access_role, current_user.organizations)
+
+    return DocumentOperationResponse(
+        message=result["message"], document_id=result["document_id"], file_name=result["file_name"]
     )
 
 
