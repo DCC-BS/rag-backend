@@ -7,7 +7,7 @@ import sys
 
 import structlog
 
-from rag.services.document_ingestion import DocumentIngestionService
+from rag.services.document_ingestion import S3DocumentIngestionService
 from rag.utils.config import ConfigurationManager
 
 
@@ -54,14 +54,13 @@ async def main() -> None:
 Examples:
   %(prog)s                           # Run with default settings
   %(prog)s --scan-only               # Run initial scan only (no watch mode)
-  %(prog)s --cleanup-orphaned        # Clean up orphaned documents during initial scan
   %(prog)s --config custom.yaml      # Use custom configuration file
   %(prog)s --console-logging         # Use console output instead of JSON logging
 
 The service will:
 1. Perform an initial scan of all configured S3 buckets
 2. Process any new or updated documents
-3. Optionally clean up orphaned documents (if --cleanup-orphaned is used)
+3. Clean up orphaned documents
 4. Start watching for changes (unless --scan-only is used)
         """,
     )
@@ -70,12 +69,6 @@ The service will:
         "--scan-only",
         action="store_true",
         help="Run initial scan only without starting watch mode",
-    )
-
-    parser.add_argument(
-        "--cleanup-orphaned",
-        action="store_true",
-        help="Clean up orphaned documents (database records without S3 files) during initial scan",
     )
 
     parser.add_argument(
@@ -118,23 +111,19 @@ The service will:
             logger.warning("Custom config file parameter provided but not supported yet")
         logger.info("Configuration loaded from default sources")
 
-        if args.cleanup_orphaned:
-            logger.info("Orphaned document cleanup is enabled")
-
         if args.scan_only:
             logger.info("Running in scan-only mode (watch disabled)")
 
         # Create the ingestion service
-        service = DocumentIngestionService(config)
+        service = S3DocumentIngestionService(config)
 
         if args.scan_only:
             # Run initial scan only
-            service.initial_scan(cleanup_orphaned=args.cleanup_orphaned)
+            service.initial_scan()
             logger.info("Initial scan completed, exiting (scan-only mode)")
         else:
             # Run the full service (initial scan + watch mode)
-            # We need to modify the run method to accept cleanup_orphaned parameter
-            await run_service_with_cleanup(service, args.cleanup_orphaned)
+            await run_service_with_cleanup(service)
 
     except KeyboardInterrupt:
         logger.info("Document ingestion service stopped by user")
@@ -144,10 +133,10 @@ The service will:
         sys.exit(1)
 
 
-async def run_service_with_cleanup(service: DocumentIngestionService, cleanup_orphaned: bool) -> None:
+async def run_service_with_cleanup(service: S3DocumentIngestionService) -> None:
     """Run the ingestion service with optional cleanup during initial scan."""
     # Perform initial scan with optional cleanup
-    service.initial_scan(cleanup_orphaned=cleanup_orphaned)
+    service.initial_scan()
 
     # Start change monitoring if enabled
     if service.config.INGESTION.WATCH_ENABLED:

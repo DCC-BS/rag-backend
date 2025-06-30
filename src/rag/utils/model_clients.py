@@ -82,7 +82,7 @@ def get_reranker_client(config: AppConfig | None = None) -> RerankerClient:
     try:
         models_response = client.models.list()
         model_data = models_response.data  # pyright: ignore[reportAttributeAccess]
-        model = model_data[0].id if model_data else "Qwen/Qwen3-Reranker-0.6B"
+        model = model_data[0]["id"] if model_data else "Qwen/Qwen3-Reranker-0.6B"
     except Exception:
         logger.exception("Could not determine reranker model from client, falling back to default.")
         model = "Qwen/Qwen3-Reranker-0.6B"

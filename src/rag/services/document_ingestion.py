@@ -243,7 +243,7 @@ class S3DocumentIngestionService:
             roles=stats_to_log["by_role"],
         )
 
-    def initial_scan(self, cleanup_orphaned: bool = False) -> None:
+    def initial_scan(self) -> None:
         """Perform initial scan of all S3 buckets for configured access roles.
 
         Args:
@@ -254,11 +254,9 @@ class S3DocumentIngestionService:
         # Reset stats for the scan
         self._reset_stats()
 
-        # Clean up orphaned documents if requested
-        if cleanup_orphaned:
-            self.logger.info("Running orphaned document cleanup before scanning")
-            cleanup_stats = self.cleanup_orphaned_documents()
-            self.stats["orphaned_cleaned"] = cleanup_stats["deleted_documents"]
+        self.logger.info("Running orphaned document cleanup before scanning")
+        cleanup_stats = self.cleanup_orphaned_documents()
+        self.stats["orphaned_cleaned"] = cleanup_stats["deleted_documents"]
 
         # Ensure buckets exist
         self.s3_utils.ensure_buckets_exist_for_roles()
@@ -435,7 +433,7 @@ class S3DocumentIngestionService:
         parsed_path = self.s3_utils.parse_document_path(document.document_path)
         if not parsed_path:
             cleanup_stats["invalid_paths"] += 1
-            return False
+            return True
 
         bucket_name, object_key = parsed_path
 
@@ -547,7 +545,3 @@ class S3DocumentIngestionService:
         )
 
         return cleanup_stats
-
-
-# Alias for backward compatibility
-DocumentIngestionService = S3DocumentIngestionService
