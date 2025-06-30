@@ -1,4 +1,3 @@
-import os
 from collections.abc import Sequence
 from typing import Any, override
 
@@ -19,6 +18,7 @@ from sqlalchemy.sql.elements import TextClause
 
 from rag.models.document import DocumentChunk
 from rag.utils.db import get_db_url
+from rag.utils.model_clients import get_embedding_client, get_reranker_client
 
 
 class PGRoleRetriever(BaseRetriever):
@@ -81,12 +81,17 @@ class PGRoleRetriever(BaseRetriever):
         rerank_top_k: int = 5,
     ):
         super().__init__()
-        self._embedding_client: Client = Client(base_url=embedding_api, api_key=os.getenv("OPENAI_API_KEY", "none"))
-        self._embedding_model: str = self._embedding_client.models.list().data[0].id or "Qwen/Qwen3-Embedding-0.6B"
-        self._reranker_client: cohere.ClientV2 = cohere.ClientV2(
-            base_url=reranker_api, api_key=os.getenv("OPENAI_API_KEY", "none")
-        )
-        self._reranker_model: str = self._reranker_client.models.list().data[0]["id"] or "Qwen/Qwen3-Reranker-0.6B"
+
+        # Setup embedding client and model
+        embedding_client_info = get_embedding_client()
+        self._embedding_client: Client = embedding_client_info.client
+        self._embedding_model: str = embedding_client_info.model
+
+        # Setup reranker client and model
+        reranker_client_info = get_reranker_client()
+        self._reranker_client: cohere.ClientV2 = reranker_client_info.client
+        self._reranker_model: str = reranker_client_info.model
+
         db_url: str = get_db_url()
         self._engine: Engine = create_engine(url=db_url)
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger()

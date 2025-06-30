@@ -117,7 +117,7 @@ class DocumentManagementService:
                 bucket_name, object_key = path_parts
 
                 # Download from S3
-                return self.s3_utils.download_s3_object(bucket_name, object_key)
+                return self.s3_utils.download_object(bucket_name, object_key)
 
         except HTTPException:
             raise
@@ -239,7 +239,7 @@ class DocumentManagementService:
                 bucket_name, object_key = path_parts
 
                 # Delete from S3
-                self.s3_utils.delete_s3_object(bucket_name, object_key)
+                self.s3_utils.delete_object(bucket_name, object_key)
 
                 # Delete from database (this will cascade to document chunks)
                 session.delete(document)

@@ -1,5 +1,4 @@
 import asyncio
-import os
 import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -16,6 +15,7 @@ from rag.connectors.docling_loader import DoclingLoader
 from rag.models.document import Document, DocumentChunk
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
+from rag.utils.model_clients import get_embedding_client
 from rag.utils.s3 import S3DocumentTagger, S3FileClassifier, S3Utils
 
 
@@ -34,10 +34,10 @@ class S3DocumentIngestionService:
         db_url: str = get_db_url()
         self.engine: Engine = create_engine(url=db_url)
 
-        self.embedding_client: Client = Client(
-            base_url=self.config.EMBEDDINGS.API_URL, api_key=os.getenv("OPENAI_API_KEY", "none")
-        )
-        self.embedding_model: str = self._get_embedding_model()
+        # Setup embedding client and model
+        embedding_client_info = get_embedding_client(self.config)
+        self.embedding_client: Client = embedding_client_info.client
+        self.embedding_model: str = embedding_client_info.model
 
         # S3 utilities setup
         self.s3_utils = S3Utils(config)
@@ -49,6 +49,7 @@ class S3DocumentIngestionService:
             "new": 0,
             "updated": 0,
             "deleted": 0,
+            "orphaned_cleaned": 0,
             "symlinks_removed": 0,
             "temp_files_removed": 0,
             "not_supported": 0,
@@ -56,16 +57,6 @@ class S3DocumentIngestionService:
             "unprocessable": 0,
             "by_role": defaultdict(int),
         }
-
-    def _get_embedding_model(self) -> str:
-        """Get the embedding model ID from the embedding service."""
-        try:
-            model_data = self.embedding_client.models.list().data
-            if model_data:
-                return model_data[0].id
-        except Exception:
-            self.logger.exception("Could not determine embedding model from client, falling back to default.")
-        return "Qwen/Qwen3-Embedding-0.6B"
 
     def _update_stats(self, stat_key: str, access_role: str | None = None) -> None:
         """Update statistics counters."""
@@ -77,32 +68,14 @@ class S3DocumentIngestionService:
         """Reset all statistics counters."""
         self.stats["new"] = 0
         self.stats["updated"] = 0
+        self.stats["deleted"] = 0
+        self.stats["orphaned_cleaned"] = 0
         self.stats["symlinks_removed"] = 0
         self.stats["temp_files_removed"] = 0
         self.stats["not_supported"] = 0
         self.stats["no_chunks"] = 0
         self.stats["unprocessable"] = 0
         self.stats["by_role"].clear()
-
-    def _is_symlink_file(self, object_key: str) -> bool:
-        """Check if the file appears to be a symlink based on the filename."""
-        return self.file_classifier.is_symlink_file(object_key)
-
-    def _is_temp_office_file(self, object_key: str) -> bool:
-        """Check if the file is a temporary MS Office file."""
-        return self.file_classifier.is_temp_office_file(object_key)
-
-    def _delete_s3_object(self, bucket_name: str, object_key: str) -> None:
-        """Delete an object from S3."""
-        self.s3_utils.delete_s3_object(bucket_name, object_key)
-
-    def _is_supported_file_type(self, object_key: str) -> bool:
-        """Check if the file type is supported by the processing pipeline."""
-        return self.file_classifier.is_supported_file_type(object_key, DoclingLoader.SUPPORTED_FORMATS)
-
-    def _get_document_path(self, bucket_name: str, object_key: str) -> str:
-        """Generate a consistent document path identifier."""
-        return self.s3_utils.format_s3_path(bucket_name, object_key)
 
     def check_document_exists(self, document_path: str) -> Document | None:
         """Check if document exists in database."""
@@ -124,10 +97,6 @@ class S3DocumentIngestionService:
             self.logger.exception("Failed to create embeddings", error=str(e))
             raise
 
-    def _download_s3_object(self, bucket_name: str, object_key: str) -> bytes:
-        """Download an S3 object and return its content."""
-        return self.s3_utils.download_s3_object(bucket_name, object_key)
-
     def _store_document_and_chunks(
         self,
         session: Session,
@@ -138,7 +107,7 @@ class S3DocumentIngestionService:
         embeddings: list[list[float]],
     ) -> None:
         """Store a document and its chunks in the database."""
-        document_path = self._get_document_path(bucket_name, object_key)
+        document_path = self.s3_utils.format_s3_path(bucket_name, object_key)
 
         # Create document record
         document = Document(
@@ -169,21 +138,21 @@ class S3DocumentIngestionService:
         s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
 
         # Check for symlinks and remove them
-        if self._is_symlink_file(object_key):
+        if self.file_classifier.is_symlink_file(object_key):
             self.logger.info(f"Removing symlink file: {s3_path}")
-            self._delete_s3_object(bucket_name, object_key)
+            self.s3_utils.delete_object(bucket_name, object_key)
             self._update_stats("symlinks_removed")
             return False
 
         # Check for temporary MS Office files and remove them
-        if self._is_temp_office_file(object_key):
+        if self.file_classifier.is_temp_office_file(object_key):
             self.logger.info(f"Removing temporary MS Office file: {s3_path}")
-            self._delete_s3_object(bucket_name, object_key)
+            self.s3_utils.delete_object(bucket_name, object_key)
             self._update_stats("temp_files_removed")
             return False
 
         # Check if file type is supported
-        if not self._is_supported_file_type(object_key):
+        if not self.file_classifier.is_supported_file_type(object_key, DoclingLoader.SUPPORTED_FORMATS):
             self.logger.debug(f"Unsupported file type: {s3_path}")
             # Only tag if not already tagged with an error
             if not self.s3_tagger.has_error_tag(bucket_name, object_key):
@@ -211,7 +180,7 @@ class S3DocumentIngestionService:
         if not access_role:
             return
 
-        document_path = self._get_document_path(bucket_name, object_key)
+        document_path = self.s3_utils.format_s3_path(bucket_name, object_key)
         existing_document = self.check_document_exists(document_path)
 
         # Check if already processed or has error tags (unless we have a database record)
@@ -265,6 +234,7 @@ class S3DocumentIngestionService:
             new_documents=stats_to_log["new"],
             updated_documents=stats_to_log["updated"],
             deleted_documents=stats_to_log["deleted"],
+            orphaned_cleaned=stats_to_log["orphaned_cleaned"],
             symlinks_removed=stats_to_log["symlinks_removed"],
             temp_files_removed=stats_to_log["temp_files_removed"],
             not_supported=stats_to_log["not_supported"],
@@ -273,12 +243,22 @@ class S3DocumentIngestionService:
             roles=stats_to_log["by_role"],
         )
 
-    def initial_scan(self) -> None:
-        """Perform initial scan of all S3 buckets for configured access roles."""
+    def initial_scan(self, cleanup_orphaned: bool = False) -> None:
+        """Perform initial scan of all S3 buckets for configured access roles.
+
+        Args:
+            cleanup_orphaned: Whether to also clean up orphaned documents during the scan
+        """
         self.logger.info("Starting initial S3 document scan")
 
         # Reset stats for the scan
         self._reset_stats()
+
+        # Clean up orphaned documents if requested
+        if cleanup_orphaned:
+            self.logger.info("Running orphaned document cleanup before scanning")
+            cleanup_stats = self.cleanup_orphaned_documents()
+            self.stats["orphaned_cleaned"] = cleanup_stats["deleted_documents"]
 
         # Ensure buckets exist
         self.s3_utils.ensure_buckets_exist_for_roles()
@@ -350,7 +330,7 @@ class S3DocumentIngestionService:
             self.logger.debug(f"Starting processing for S3 document: {s3_path}")
 
             # Download the file content
-            file_content = self._download_s3_object(bucket_name, object_key)
+            file_content = self.s3_utils.download_object(bucket_name, object_key)
 
             # Create a temporary file for docling processing
             with tempfile.NamedTemporaryFile(suffix=Path(object_key).suffix, delete=False) as tmp_file:
@@ -423,9 +403,8 @@ class S3DocumentIngestionService:
 
     def _handle_document_update(self, bucket_name: str, object_key: str, access_role: str) -> None:
         """Handle updating an existing document."""
-        document_path = self._get_document_path(bucket_name, object_key)
-        s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
-        self.logger.info(f"Document {s3_path} needs update")
+        document_path = self.s3_utils.format_s3_path(bucket_name, object_key)
+        self.logger.info(f"Document {document_path} needs update")
 
         # Remove processed tag and delete from database
         self.s3_tagger.remove_processed_tag(bucket_name, object_key)
@@ -441,6 +420,133 @@ class S3DocumentIngestionService:
         self.logger.info(f"New document found: {s3_path}")
         self.process_s3_document(bucket_name, object_key, access_role)
         self._update_stats("new", access_role)
+
+    def _is_document_orphaned(self, document: Document, cleanup_stats: dict[str, int]) -> bool:
+        """Check if a single document is orphaned (S3 object no longer exists).
+
+        Args:
+            document: Document to check
+            cleanup_stats: Statistics dictionary to update
+
+        Returns:
+            True if document is orphaned, False otherwise
+        """
+        # Parse document path
+        parsed_path = self.s3_utils.parse_document_path(document.document_path)
+        if not parsed_path:
+            cleanup_stats["invalid_paths"] += 1
+            return False
+
+        bucket_name, object_key = parsed_path
+
+        try:
+            # Check if S3 object exists
+            if not self.s3_utils.object_exists(bucket_name, object_key):
+                self.logger.info(
+                    f"Document orphaned - S3 object not found: {document.document_path}",
+                    document_id=document.id,
+                    file_name=document.file_name,
+                )
+                return True
+            else:
+                self.logger.debug(f"Document valid - S3 object exists: {document.document_path}")
+                return False
+
+        except Exception as e:
+            self.logger.warning(
+                f"Error checking S3 object existence for {document.document_path}",
+                error=str(e),
+                document_id=document.id,
+            )
+            cleanup_stats["s3_check_errors"] += 1
+            return False
+
+    def _delete_orphaned_documents(
+        self, session: Session, orphaned_documents: list[Document], cleanup_stats: dict[str, int]
+    ) -> None:
+        """Delete a list of orphaned documents from the database.
+
+        Args:
+            session: Database session
+            orphaned_documents: List of orphaned documents to delete
+            cleanup_stats: Statistics dictionary to update
+        """
+        self.logger.info(f"Deleting {len(orphaned_documents)} orphaned documents")
+
+        for document in orphaned_documents:
+            try:
+                # Delete document (chunks will be deleted automatically due to cascade)
+                session.delete(document)
+                cleanup_stats["deleted_documents"] += 1
+                self.logger.info(
+                    f"Deleted orphaned document: {document.document_path}",
+                    document_id=document.id,
+                    file_name=document.file_name,
+                )
+            except Exception as e:
+                self.logger.exception(
+                    f"Failed to delete orphaned document {document.id}",
+                    document_path=document.document_path,
+                    error=str(e),
+                )
+
+        # Commit all deletions
+        session.commit()
+        self.logger.info(f"Successfully deleted {cleanup_stats["deleted_documents"]} orphaned documents")
+
+    def cleanup_orphaned_documents(self) -> dict[str, int]:
+        """Check all documents in database and remove those that no longer exist in S3.
+
+        Returns:
+            Dictionary with cleanup statistics
+        """
+        self.logger.info("Starting cleanup of orphaned documents")
+
+        cleanup_stats = {
+            "total_documents": 0,
+            "orphaned_documents": 0,
+            "invalid_paths": 0,
+            "s3_check_errors": 0,
+            "deleted_documents": 0,
+        }
+
+        try:
+            with Session(self.engine) as session:
+                # Get all documents from database
+                statement = select(Document)
+                documents = session.execute(statement).scalars().all()
+
+                cleanup_stats["total_documents"] = len(documents)
+                self.logger.info(f"Found {len(documents)} documents in database to validate")
+
+                # Find orphaned documents
+                orphaned_documents = []
+                for document in documents:
+                    if self._is_document_orphaned(document, cleanup_stats):
+                        orphaned_documents.append(document)
+                        cleanup_stats["orphaned_documents"] += 1
+
+                # Delete orphaned documents if any found
+                if orphaned_documents:
+                    self._delete_orphaned_documents(session, orphaned_documents, cleanup_stats)
+                else:
+                    self.logger.info("No orphaned documents found")
+
+        except Exception as e:
+            self.logger.exception("Failed to cleanup orphaned documents", error=str(e))
+            raise
+
+        # Log final statistics
+        self.logger.info(
+            "Orphaned document cleanup completed",
+            total_documents=cleanup_stats["total_documents"],
+            orphaned_documents=cleanup_stats["orphaned_documents"],
+            invalid_paths=cleanup_stats["invalid_paths"],
+            s3_check_errors=cleanup_stats["s3_check_errors"],
+            deleted_documents=cleanup_stats["deleted_documents"],
+        )
+
+        return cleanup_stats
 
 
 # Alias for backward compatibility

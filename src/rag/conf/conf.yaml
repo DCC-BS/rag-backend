@@ -9,7 +9,6 @@ EMBEDDINGS:
   API_URL: "${oc.env:EMBEDDING_URL}"
   EMBEDDING_INSTRUCTIONS: "Instruct: Du erhälst eine Suchanfrage. Suche relevante Passagen aus Dokumenten, die diese Frage beantworten. \nFrage: "
 LLM:
-  MODEL: "Qwen/Qwen3-32B-AWQ" # "ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g" # "meta-llama-3.3-70b-instruct" # "llama-3.2-3b-instruct"
   API_URL: "${oc.env:LLM_URL}"
 RERANKER:
   API_URL: "${oc.env:RERANKER_URL}"

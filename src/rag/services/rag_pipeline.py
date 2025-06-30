@@ -9,7 +9,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
-from pydantic import SecretStr
 
 from rag.actions.backoff_action import BackoffAction
 from rag.actions.generate_answer_action import GenerateAnswerAction
@@ -24,6 +23,7 @@ from rag.models.rag_states import (
 )
 from rag.models.stream_response import StreamResponse
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.model_clients import get_llm_client
 
 
 class SHRAGPipeline:
@@ -38,7 +38,7 @@ class SHRAGPipeline:
 
         # Setup components
         self.retriever: RetrieverProtocol = retriever or self._setup_retriever()
-        self.llm: ChatOpenAI = llm or self._setup_llm()
+        self.llm: ChatOpenAI = llm or get_llm_client(self.config).client
 
         # Instantiate actions
         self.route_question_action: RouteQuestionAction = RouteQuestionAction(llm=self.llm)
@@ -167,15 +167,6 @@ class SHRAGPipeline:
             rerank_top_k=self.config.RETRIEVER.RERANK_TOP_K,
         )
         return retriever
-
-    def _setup_llm(self):
-        llm = ChatOpenAI(
-            model=self.config.LLM.MODEL,
-            api_key=SecretStr("None"),
-            base_url=self.config.LLM.API_URL,
-        )
-
-        return llm
 
     async def astream_query(
         self,

@@ -37,7 +37,6 @@ class EmbeddingsConfig:
 
 @dataclass
 class LLMConfig:
-    MODEL: str
     API_URL: str
 
 

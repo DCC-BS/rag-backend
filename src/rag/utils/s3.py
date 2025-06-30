@@ -18,9 +18,9 @@ class S3Utils:
         """Initialize S3 utilities with configuration."""
         self.config: AppConfig = config or ConfigurationManager.get_config()
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
-        self.s3_client = self._setup_s3_client()
+        self.s3_client = self._setup_client()
 
-    def _setup_s3_client(self):
+    def _setup_client(self):
         """Set up and configure the S3 client for MinIO."""
         try:
             client = boto3.client(
@@ -85,16 +85,16 @@ class S3Utils:
             return None
         return bucket_parts[-1].upper()
 
-    def get_s3_tags(self, bucket_name: str, object_key: str) -> dict[str, str]:
-        """Get S3 object tags as a dictionary."""
+    def get_tags(self, bucket_name: str, object_key: str) -> dict[str, str]:
+        """Get object tags as a dictionary."""
         try:
             response = self.s3_client.get_object_tagging(Bucket=bucket_name, Key=object_key)
             return {tag["Key"]: tag["Value"] for tag in response.get("TagSet", [])}
         except ClientError:
             return {}
 
-    def update_s3_tags(self, bucket_name: str, object_key: str, tag_set: list[dict[str, str]]) -> None:
-        """Update S3 object tags."""
+    def update_tags(self, bucket_name: str, object_key: str, tag_set: list[dict[str, str]]) -> None:
+        """Update object tags."""
         try:
             self.s3_client.put_object_tagging(Bucket=bucket_name, Key=object_key, Tagging={"TagSet": tag_set})
         except ClientError as e:
@@ -111,8 +111,8 @@ class S3Utils:
             self.logger.info(f"Uploaded {local_path} to s3://{bucket_name}/{object_key}")
             return True
 
-    def download_s3_object(self, bucket_name: str, object_key: str) -> bytes:
-        """Download an S3 object and return its content."""
+    def download_object(self, bucket_name: str, object_key: str) -> bytes:
+        """Download an object and return its content."""
         try:
             response = self.s3_client.get_object(Bucket=bucket_name, Key=object_key)
             return response["Body"].read()
@@ -120,8 +120,8 @@ class S3Utils:
             self.logger.exception(f"Failed to download {object_key} from {bucket_name}", error=str(e))
             raise
 
-    def delete_s3_object(self, bucket_name: str, object_key: str) -> None:
-        """Delete an object from S3."""
+    def delete_object(self, bucket_name: str, object_key: str) -> None:
+        """Delete an object."""
         s3_path = self.format_s3_path(bucket_name, object_key)
         try:
             self.s3_client.delete_object(Bucket=bucket_name, Key=object_key)
@@ -129,6 +129,50 @@ class S3Utils:
         except ClientError as e:
             self.logger.exception(f"Failed to delete S3 object {s3_path}", error=str(e))
             raise
+
+    def object_exists(self, bucket_name: str, object_key: str) -> bool:
+        """Check if an object exists.
+
+        Args:
+            bucket_name: The S3 bucket name
+            object_key: The S3 object key
+
+        Returns:
+            True if the object exists, False if not found
+
+        Raises:
+            ClientError: For S3 errors other than 404 (not found)
+        """
+        try:
+            self.s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return False
+            # Re-raise other errors (permissions, etc.)
+            self.logger.warning(f"Error checking S3 object existence: {bucket_name}/{object_key}", error=str(e))
+            raise
+        else:
+            return True
+
+    def parse_document_path(self, document_path: str) -> tuple[str, str] | None:
+        """Parse document path to extract bucket name and object key.
+
+        Args:
+            document_path: S3 path in format s3://bucket-name/object-key
+
+        Returns:
+            Tuple of (bucket_name, object_key) or None if invalid format
+        """
+        if not document_path.startswith("s3://"):
+            self.logger.warning(f"Invalid document path format: {document_path}")
+            return None
+
+        path_parts = document_path[5:].split("/", 1)  # Remove s3:// prefix
+        if len(path_parts) != 2:
+            self.logger.warning(f"Invalid document path format: {document_path}")
+            return None
+
+        return path_parts[0], path_parts[1]
 
     @staticmethod
     def normalize_path(path: str) -> str:
@@ -177,18 +221,18 @@ class S3DocumentTagger:
 
     def is_document_processed(self, bucket_name: str, object_key: str) -> bool:
         """Check if a document has been processed by looking for the processed tag."""
-        tags = self.s3_utils.get_s3_tags(bucket_name, object_key)
+        tags = self.s3_utils.get_tags(bucket_name, object_key)
         return self.config.INGESTION.PROCESSED_TAG in tags
 
     def has_error_tag(self, bucket_name: str, object_key: str) -> bool:
         """Check if a document has any error tag."""
-        tags = self.s3_utils.get_s3_tags(bucket_name, object_key)
+        tags = self.s3_utils.get_tags(bucket_name, object_key)
         return any(tag in tags for tag in self.error_tags)
 
     def mark_document_processed(self, bucket_name: str, object_key: str) -> None:
         """Mark a document as processed by adding a tag."""
         try:
-            tag_dict = self.s3_utils.get_s3_tags(bucket_name, object_key)
+            tag_dict = self.s3_utils.get_tags(bucket_name, object_key)
             tag_set = [{"Key": k, "Value": v} for k, v in tag_dict.items()]
 
             # Add processed tag
@@ -197,7 +241,7 @@ class S3DocumentTagger:
                 "Value": datetime.now(UTC).isoformat(),
             })
 
-            self.s3_utils.update_s3_tags(bucket_name, object_key, tag_set)
+            self.s3_utils.update_tags(bucket_name, object_key, tag_set)
             self.logger.debug(f"Marked {object_key} as processed")
         except Exception as e:
             self.logger.warning(f"Failed to mark {object_key} as processed", error=str(e))
@@ -205,7 +249,7 @@ class S3DocumentTagger:
     def add_error_tag(self, bucket_name: str, object_key: str, error_tag: str, error_message: str = "") -> None:
         """Add an error tag to a document."""
         try:
-            existing_tags = self.s3_utils.get_s3_tags(bucket_name, object_key)
+            existing_tags = self.s3_utils.get_tags(bucket_name, object_key)
 
             # Remove any existing processing tags
             tag_set = [{"Key": k, "Value": v} for k, v in existing_tags.items() if k not in self.all_processing_tags]
@@ -214,7 +258,7 @@ class S3DocumentTagger:
             tag_value = error_message if error_message else datetime.now(UTC).isoformat()
             tag_set.append({"Key": error_tag, "Value": tag_value})
 
-            self.s3_utils.update_s3_tags(bucket_name, object_key, tag_set)
+            self.s3_utils.update_tags(bucket_name, object_key, tag_set)
             self.logger.info(f"Tagged {object_key} with error tag {error_tag}")
         except Exception as e:
             self.logger.warning(f"Failed to add error tag {error_tag} to {object_key}", error=str(e))
@@ -222,14 +266,14 @@ class S3DocumentTagger:
     def remove_processed_tag(self, bucket_name: str, object_key: str) -> None:
         """Remove the processed tag from a document."""
         try:
-            existing_tags = self.s3_utils.get_s3_tags(bucket_name, object_key)
+            existing_tags = self.s3_utils.get_tags(bucket_name, object_key)
 
             # Remove processed tag
             tag_set = [
                 {"Key": k, "Value": v} for k, v in existing_tags.items() if k != self.config.INGESTION.PROCESSED_TAG
             ]
 
-            self.s3_utils.update_s3_tags(bucket_name, object_key, tag_set)
+            self.s3_utils.update_tags(bucket_name, object_key, tag_set)
             self.logger.debug(f"Removed processed tag from {object_key}")
         except Exception as e:
             self.logger.warning(f"Failed to remove processed tag from {object_key}", error=str(e))
