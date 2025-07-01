@@ -9,6 +9,8 @@ from typing_extensions import TypedDict
 
 
 class InputState(TypedDict):
+    """Input state for the RAG pipeline."""
+
     input: str
     user_organizations: list[str]
 
@@ -17,21 +19,24 @@ class RouteQuery(BaseModel):
     """Route a user query to retrieval or answer generation."""
 
     next_step: Literal["retrieval", "answer"] = Field(
-        default=...,
         description="Given a user question and a conversation history, choose to route it to a vectorstore or a llm.",
     )
 
 
 class OutputState(TypedDict):
+    """Output state for the RAG pipeline."""
+
     messages: Annotated[Sequence[BaseMessage], add_messages]
     context: list[Document]
     answer: str | None
     hallucination_score: Literal["yes", "no"] | None
     answer_score: Literal["yes", "no"] | None
-    route_query: RouteQuery | None
+    route_query: Literal["retrieval", "answer"] | None
 
 
 class RAGState(InputState, OutputState):
+    """Complete state for the RAG pipeline combining input and output states."""
+
     pass
 
 

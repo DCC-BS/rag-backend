@@ -5,10 +5,19 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.types import Command
+from pydantic import BaseModel, Field
 
 from rag.actions.action_protocol import ActionProtocol
-from rag.models.rag_states import RAGState, RouteQuery
+from rag.models.rag_states import RAGState
 from rag.models.stream_response import StreamResponse
+
+
+class RouteDecision(BaseModel):
+    """Route a user query to retrieval or answer generation."""
+
+    next_step: Literal["retrieval", "answer"] = Field(
+        description="Given a user question and a conversation history, choose to route it to a vectorstore or a llm.",
+    )
 
 
 class RouteQuestionAction(ActionProtocol):
@@ -19,7 +28,7 @@ class RouteQuestionAction(ActionProtocol):
     def __init__(self, llm: ChatOpenAI) -> None:
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.llm = llm
-        self.structured_llm_router = self.llm.with_structured_output(schema=RouteQuery, method="json_schema")
+        self.structured_llm_router = self.llm.with_structured_output(schema=RouteDecision, method="json_schema")
 
     def __call__(self, state: RAGState, config: RunnableConfig) -> Command[Literal["generate_answer", "retrieve"]]:
         """
@@ -29,7 +38,7 @@ class RouteQuestionAction(ActionProtocol):
             state (dict): The current graph state
 
         Returns:
-            str: Next node to call
+            Command: Command object with routing decision
         """
 
         self.logger.info("---ROUTE QUESTION---")
@@ -39,12 +48,15 @@ class RouteQuestionAction(ActionProtocol):
                 update={"route_query": "retrieval"},
                 goto="retrieve",
             )
+
         system = """You are an expert at routing a user question to a vectorstore or llm.
         If you can answer the question based on the conversation history, return "answer".
         If you need more information, return "retrieval"."""
+
         context_messages: list[tuple[str, str | list[str | dict[Any, Any]]]] = [
             (message.type, message.content) for message in state["messages"][1:]
         ]
+
         route_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
             messages=[
                 ("system", system),
@@ -55,8 +67,10 @@ class RouteQuestionAction(ActionProtocol):
                 ),
             ]
         )
+
         question_router = route_prompt | self.structured_llm_router
-        routing_result: RouteQuery = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
+        routing_result: RouteDecision = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
+
         if routing_result.next_step == "answer":
             self.logger.info("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(

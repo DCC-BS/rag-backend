@@ -46,13 +46,13 @@ class GradeAnswerAction(ActionProtocol):
             self.logger.info("---ANSWER IS RELEVANT---")
 
             return Command(
-                update={"answer_score": True},
+                update={"answer_score": "yes"},
             )
         else:
             self.logger.info("---ANSWER IS NOT RELEVANT---")
             return Command(
                 update={
-                    "answer_score": False,
+                    "answer_score": "no",
                 },
             )
 
@@ -63,5 +63,5 @@ class GradeAnswerAction(ActionProtocol):
         return StreamResponse.create_status(
             message="Antwort ist relevant",
             sender="GradeAnswerAction",
-            decision="Ja" if data.get("answer_score") else "Nein",
+            decision="Ja" if data.get("answer_score") == "yes" else "Nein",
         )
