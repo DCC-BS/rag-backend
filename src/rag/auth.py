@@ -1,3 +1,4 @@
+import base64
 import os
 from typing import Annotated, Any
 
@@ -122,6 +123,29 @@ def _validate_and_decode_id_token(
     return payload
 
 
+async def _get_user_photo(token: str) -> str | None:
+    """Fetches user's photo from MS Graph and returns it as a data URI."""
+    graph_photo_url = "https://graph.microsoft.com/v1.0/me/photo/$value"
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                graph_photo_url,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if response.status_code == 200:
+                photo_data = await response.aread()
+                content_type = response.headers.get("Content-Type", "image/jpeg")
+                encoded_photo = base64.b64encode(photo_data).decode("utf-8")
+                return f"data:{content_type};base64,{encoded_photo}"
+        except httpx.RequestError:
+            # Log this maybe, but for now just return None
+            return None
+        else:
+            # If user has no photo, Graph API returns 404. We can ignore this.
+            # We also ignore other errors to not fail the login process.
+            return None
+
+
 def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HTTPException) -> User:
     user_id_val: str | None = payload.get("sub")
     email: str | None = payload.get("email")
@@ -176,6 +200,8 @@ async def get_current_user(
             credentials_exception,
         )
         user = _create_user_from_payload(payload, credentials_exception)
+        if not user.picture and access_token_from_header:
+            user.picture = await _get_user_photo(access_token_from_header)
     except jose_exceptions.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

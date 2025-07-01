@@ -53,7 +53,7 @@ class SHRAGPipeline:
             "route_question": self.route_question_action.update_handler,
             "retrieve": self.retrieve_action.update_handler,
             # "grade_hallucination": self.grade_hallucination_action.update_handler,
-            # "grade_answer": self.grade_answer_action.update_handler,
+            "grade_answer": self.grade_answer_action.update_handler,
             "generate_answer": self.generate_answer_action.update_handler,
             "backoff": self.backoff_action.update_handler,
         }
@@ -179,7 +179,6 @@ class SHRAGPipeline:
         if user_organizations is None:
             user_organizations = []
         user_input = self._prepare_user_input(message, user_organizations, thread_id, resume_action, resume_data)
-        self.logger.info(f"User input: {user_input}")
         # thread_id is validated by _prepare_user_input for its necessity.
         # It must be non-None if execution reaches here without an error.
         if thread_id is None:
