@@ -188,8 +188,11 @@ class SHRAGPipeline:
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
         async for kind, stream_content in self.graph.astream(
-            input=user_input, stream_mode=["updates", "messages"], config=config
+            input=user_input, stream_mode=["updates", "messages", "custom"], config=config
         ):
+            if kind == "custom":
+                self.logger.info(f"Custom event: {stream_content}")
+                yield StreamResponse.create_status(message=stream_content, sender="SHRAGPipeline")
             if kind == "updates" and isinstance(stream_content, dict):
                 for response in self._handle_updates_event(stream_content):
                     yield response

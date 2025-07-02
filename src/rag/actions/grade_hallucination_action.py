@@ -4,6 +4,7 @@ import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
@@ -42,6 +43,9 @@ class GradeHallucinationAction(ActionProtocol):
         hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
         if state["context"] is None:
             raise ValueError("Context is None")
+
+        writer = get_stream_writer()
+        writer("Überprüfe auf Halluzinationen...")
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
                 "documents": "\n\n".join([doc.page_content for doc in state["context"]]),

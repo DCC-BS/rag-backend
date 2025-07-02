@@ -6,10 +6,12 @@ from langchain.schema import BaseMessage
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.config import get_stream_writer
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
 from rag.models.stream_response import StreamResponse
+from rag.tools.calculator import add, divide, multiply, square, subtract
 
 
 class GenerateAnswerAction(ActionProtocol):
@@ -26,6 +28,7 @@ class GenerateAnswerAction(ActionProtocol):
         "Don't try to make up an answer. "
         "Answer in German. \n"
         "Use markdown formatting for your answer. \n"
+        "You can use tools to calculate numbers. \n"
         "For each statement in your answer, cite the source document id by enclosing it in square brackets at the end of the sentence or paragraph like this: [file_id] \n"
         "If multiple documents support a statement, include all relevant citations like [file_id_1, file_id_2, file_id_3]\n"
         "Only cite documents that directly support your statements. \n\n"
@@ -53,7 +56,7 @@ class GenerateAnswerAction(ActionProtocol):
 
     def __init__(self, llm: ChatOpenAI) -> None:
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
-        self.llm = llm
+        self.llm = llm.bind_tools([multiply, add, subtract, divide, square])
 
     def __call__(self, state: RAGState, config: RunnableConfig):
         """
@@ -94,6 +97,8 @@ class GenerateAnswerAction(ActionProtocol):
         ])
         prompt = template.invoke({"context": context, "input": state["input"]}, config)
         messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())
+        writer = get_stream_writer()
+        writer("Generiere Antwort...")
         response = self.llm.invoke(messages, config)
         return {"messages": [*messages, response]}
 

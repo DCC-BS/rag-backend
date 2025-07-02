@@ -4,6 +4,7 @@ import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langgraph.config import get_stream_writer
 from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
@@ -31,7 +32,8 @@ class GradeAnswerAction(ActionProtocol):
             It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
             Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question.
             If the answer is relevant, return 'yes'. If the answer is not relevant, return 'no'.
-            If the answer is not relevant, provide a reason for the grade."""
+            If the answer is not relevant, provide a reason for the grade.
+            Provide your reasoning for the grade in German."""
         answer_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
             messages=[
                 ("system", system),
@@ -39,6 +41,8 @@ class GradeAnswerAction(ActionProtocol):
             ]
         )
         answer_grader = answer_prompt | self.structured_llm_grade_answer
+        writer = get_stream_writer()
+        writer("Bewerte Antwortqualität...")
         answer_result: GradeAnswer = answer_grader.invoke(
             {"answer": state["messages"][-1].content, "question": state["input"]}, config
         )  # pyright: ignore[reportAssignmentType]
@@ -53,6 +57,7 @@ class GradeAnswerAction(ActionProtocol):
             return Command(
                 update={
                     "answer_score": "no",
+                    "reason": answer_result.reason,
                 },
             )
 
@@ -63,5 +68,5 @@ class GradeAnswerAction(ActionProtocol):
         return StreamResponse.create_status(
             message="Antwort ist relevant",
             sender="GradeAnswerAction",
-            decision="Ja" if data.get("answer_score") == "yes" else "Nein",
+            decision="Ja" if data.get("answer_score") == "yes" else "Nein. Begründung: " + data.get("reason", ""),
         )

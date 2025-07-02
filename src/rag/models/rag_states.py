@@ -31,6 +31,7 @@ class OutputState(TypedDict):
     hallucination_score: Literal["yes", "no"] | None
     answer_score: Literal["yes", "no"] | None
     route_query: Literal["retrieval", "answer"] | None
+    reason: str | None
 
 
 class RAGState(InputState, OutputState):
@@ -51,3 +52,4 @@ class GradeAnswer(BaseModel):
     """Binary score for answer generation."""
 
     binary_score: Literal["yes", "no"] = Field(description="Answer is relevant to the question, 'yes' or 'no'")
+    reason: str | None = Field(description="Reason for the grade")
