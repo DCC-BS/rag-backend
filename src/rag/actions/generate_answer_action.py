@@ -95,7 +95,7 @@ class GenerateAnswerAction(ActionProtocol):
         prompt = template.invoke({"context": context, "input": state["input"]}, config)
         messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())
         response = self.llm.invoke(messages, config)
-        return {"messages": [*messages, response], "answer": response.content}
+        return {"messages": [*messages, response]}
 
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """

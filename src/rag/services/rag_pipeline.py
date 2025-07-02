@@ -8,7 +8,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import Command
 
 from rag.actions.backoff_action import BackoffAction
 from rag.actions.generate_answer_action import GenerateAnswerAction
@@ -17,7 +16,6 @@ from rag.actions.retrieve_action import RetrieveAction, RetrieverProtocol
 from rag.actions.route_question_action import RouteQuestionAction
 from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.rag_states import (
-    InputState,
     RAGState,
 )
 from rag.models.stream_response import StreamResponse
@@ -124,17 +122,19 @@ class SHRAGPipeline:
         message: str | None,
         user_organizations: list[str] | None,
         thread_id: str | None,
-        resume_action: str | None,
-        resume_data: str | None,
-    ) -> InputState | Command[Any]:
-        if resume_action is not None:
-            if thread_id is None:
-                raise ValueError("thread_id is required when resuming execution")
-            return Command(resume={"action": resume_action, "data": resume_data})
-
+    ) -> RAGState:
         if message is None or user_organizations is None or user_organizations == [] or thread_id is None:
             raise ValueError("message, user_organizations, and thread_id are required for new queries")
-        return InputState(input=message, user_organizations=user_organizations)
+
+        return RAGState(
+            input=message,
+            user_organizations=user_organizations,
+            messages=[],
+            context=[],
+            hallucination_score=None,
+            answer_score=None,
+            route_query=None,
+        )
 
     def _handle_updates_event(self, content: dict[str, Any]) -> Iterator[StreamResponse]:
         for key, update_content in content.items():
@@ -175,28 +175,20 @@ class SHRAGPipeline:
         message: str | None = None,
         user_organizations: list[str] | None = None,
         thread_id: str | None = None,
-        resume_action: str | None = None,
-        resume_data: str | None = None,
     ) -> AsyncIterator[StreamResponse]:
         if user_organizations is None:
             user_organizations = []
-        user_input = self._prepare_user_input(message, user_organizations, thread_id, resume_action, resume_data)
+        user_input: RAGState = self._prepare_user_input(message, user_organizations, thread_id)
         # thread_id is validated by _prepare_user_input for its necessity.
         # It must be non-None if execution reaches here without an error.
         if thread_id is None:
-            # This case should ideally not be hit if _prepare_user_input is comprehensive,
-            # but as RunnableConfig requires it, an explicit check guards against misuse.
             raise ValueError("thread_id is required for configuring the stream.")
 
         recursion_limit = 25
         config = RunnableConfig(recursion_limit=recursion_limit, configurable={"thread_id": thread_id})
 
-        # LangGraph can accept partial state inputs and will initialize missing fields
-        from typing import cast
-
-        graph_input = cast(Any, user_input)
         async for kind, stream_content in self.graph.astream(
-            input=graph_input, stream_mode=["updates", "messages"], config=config
+            input=user_input, stream_mode=["updates", "messages"], config=config
         ):
             if kind == "updates" and isinstance(stream_content, dict):
                 for response in self._handle_updates_event(stream_content):

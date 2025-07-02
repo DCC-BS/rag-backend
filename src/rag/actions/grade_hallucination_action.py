@@ -45,7 +45,7 @@ class GradeHallucinationAction(ActionProtocol):
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
                 "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
-                "answer": state["answer"],
+                "answer": state["messages"][-1].content,
             },
             config,
         )  # pyright: ignore[reportAssignmentType]

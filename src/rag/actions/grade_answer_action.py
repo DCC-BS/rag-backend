@@ -40,7 +40,7 @@ class GradeAnswerAction(ActionProtocol):
         )
         answer_grader = answer_prompt | self.structured_llm_grade_answer
         answer_result: GradeAnswer = answer_grader.invoke(
-            {"answer": state["answer"], "question": state["input"]}, config
+            {"answer": state["messages"][-1].content, "question": state["input"]}, config
         )  # pyright: ignore[reportAssignmentType]
         if answer_result.binary_score == "yes":
             self.logger.info("---ANSWER IS RELEVANT---")
