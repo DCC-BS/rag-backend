@@ -81,6 +81,7 @@ class DocumentManagementService:
                         "document_path": doc.document_path,
                         "mime_type": doc.mime_type,
                         "num_pages": doc.num_pages,
+                        "page": None,
                         "created_at": doc.created_at.isoformat(),
                         "access_roles": doc.access_roles,
                     }

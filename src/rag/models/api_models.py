@@ -11,6 +11,7 @@ class DocumentMetadata(BaseModel):
     document_path: str
     mime_type: str
     num_pages: int | None
+    page: int | None
     created_at: str
     access_roles: list[str]
 

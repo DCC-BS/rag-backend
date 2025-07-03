@@ -114,8 +114,9 @@ async def search_documents(
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
     query: str | None = None,
-    limit: int = 10,
+    limit: int = 5,
 ) -> DocumentListResponse:
+    """Search documents by query or get all documents accessible by the current user."""
     if query is None:
         documents_data = document_service.get_user_documents(current_user.organizations)
     else:
