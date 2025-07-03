@@ -7,6 +7,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
+from rag.connectors.docling_loader import DoclingLoader
 from rag.models.document import Document
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
@@ -127,6 +128,16 @@ class DocumentManagementService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve document"
             ) from e
 
+    def _validate_file(self, filename: str, bucket_name: str, object_key: str) -> str | None:
+        # Ensure bucket exists
+        self.s3_utils.ensure_bucket_exists(bucket_name)
+        # Check if file already exists
+        if self.s3_utils.object_exists(bucket_name, object_key):
+            return f"File already exists: {filename}"
+        # Check if supported file type
+        if "." + filename.split(".")[-1] not in DoclingLoader.SUPPORTED_FORMATS:
+            return f"Unsupported file type: {filename.split(".")[-1]}"
+
     def upload_document(self, file: UploadFile, access_role: str, user_access_roles: list[str]) -> dict[str, Any]:
         """Upload a new document to S3.
 
@@ -149,17 +160,18 @@ class DocumentManagementService:
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File name is required")
 
+        # Get bucket name for the role
+        bucket_name = self.s3_utils.get_bucket_name(access_role)
+
+        # Normalize the file name for S3
+        normalized_filename = S3Utils.normalize_path(file.filename)
+        object_key = normalized_filename
+
+        error_message = self._validate_file(file.filename, bucket_name, object_key)
+        if error_message:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
+
         try:
-            # Get bucket name for the role
-            bucket_name = self.s3_utils.get_bucket_name(access_role)
-
-            # Ensure bucket exists
-            self.s3_utils.ensure_bucket_exists(bucket_name)
-
-            # Normalize the file name for S3
-            normalized_filename = S3Utils.normalize_path(file.filename)
-            object_key = normalized_filename
-
             # Create temporary file to upload
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 # Read file content

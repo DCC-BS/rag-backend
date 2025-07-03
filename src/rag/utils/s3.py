@@ -53,7 +53,6 @@ class S3Utils:
         """Ensure a bucket exists, creating it if necessary."""
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
-            self.logger.debug(f"Bucket {bucket_name} already exists")
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 # Bucket doesn't exist, create it

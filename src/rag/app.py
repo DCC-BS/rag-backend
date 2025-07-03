@@ -142,21 +142,33 @@ async def get_document_by_id(
 @app.post("/documents", response_model=DocumentOperationResponse)
 async def upload_document(
     access_role: Annotated[str, Form()],
-    file: Annotated[UploadFile, File()],
+    files: Annotated[list[UploadFile], File()],
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
 ) -> DocumentOperationResponse:
     """Upload a new document to S3."""
-    result = document_service.upload_document(file, access_role, current_user.organizations)
+    results: dict[str, list[str]] = {"failed": [], "success": []}
+    # Only raise an exception if we are handling single file upload
+    raise_exception: bool = len(files) == 1
+    print(len(files))
+    print(raise_exception)
+    for file in files:
+        try:
+            _ = document_service.upload_document(file, access_role, current_user.organizations)
+            results["success"].append(file.filename or "")
+        except Exception:
+            results["failed"].append(file.filename or "")
+            if raise_exception:
+                raise
 
+    message = f"{len(results["success"])} files uploaded successfully. {len(results["failed"])} files failed to upload."
     return DocumentOperationResponse(
-        message=result["message"],
-        file_name=result.get("original_filename"),
+        message=message,
+        file_name="",
         additional_info={
-            "bucket_name": result["bucket_name"],
-            "object_key": result["object_key"],
-            "normalized_filename": result["normalized_filename"],
-            "size": result["size"],
+            "success": len(results["success"]),
+            "failed": len(results["failed"]),
+            "failed_files": results["failed"],
         },
     )
 

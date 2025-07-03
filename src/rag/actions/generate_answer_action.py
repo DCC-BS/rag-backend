@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -19,7 +20,9 @@ class GenerateAnswerAction(ActionProtocol):
     Action to generate an answer based on the context and question.
     """
 
-    system_prompt: str = (
+    today_date: str = datetime.now().strftime("%Y-%m-%d")
+
+    system_prompt: str = f"""
         "You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland. "
         "You are given a question and a context of documents that are relevant to the question. "
         "You are to answer the question based on the context and the conversation history. \n"
@@ -32,6 +35,7 @@ class GenerateAnswerAction(ActionProtocol):
         "For each statement in your answer, cite the source document id by enclosing it in square brackets at the end of the sentence or paragraph like this: [file_id] \n"
         "If multiple documents support a statement, include all relevant citations like [file_id_1, file_id_2, file_id_3]\n"
         "Only cite documents that directly support your statements. \n\n"
+        "Today's date is {today_date}. \n"
         "Example:\n"
         "Context:\n"
         "<document>\n"
@@ -52,7 +56,7 @@ class GenerateAnswerAction(ActionProtocol):
         "</document>\n\n"
         "Question: Was ist die Haftpflichtversicherung?\n"
         "Answer: Die Haftpflichtversicherung ist eine Versicherung, die die Haftpflicht für die Versicherungsnehmer abdeckt[1]. "
-    )
+    """
 
     def __init__(self, llm: ChatOpenAI) -> None:
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
