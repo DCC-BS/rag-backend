@@ -134,6 +134,7 @@ class SHRAGPipeline:
             hallucination_score=None,
             answer_score=None,
             route_query=None,
+            reason=None,
         )
 
     def _handle_updates_event(self, content: dict[str, Any]) -> Iterator[StreamResponse]:
@@ -166,7 +167,7 @@ class SHRAGPipeline:
             embedding_instructions=self.config.EMBEDDINGS.EMBEDDING_INSTRUCTIONS,
             bm25_limit=self.config.RETRIEVER.BM25_LIMIT,
             vector_limit=self.config.RETRIEVER.VECTOR_LIMIT,
-            rerank_top_k=self.config.RETRIEVER.RERANK_TOP_K,
+            top_k=self.config.RETRIEVER.RERANK_TOP_K,
         )
         return retriever
 

@@ -78,7 +78,8 @@ class PGRoleRetriever(BaseRetriever):
         embedding_instructions: str,
         bm25_limit: int = 20,
         vector_limit: int = 20,
-        rerank_top_k: int = 5,
+        top_k: int = 5,
+        use_reranker: bool = True,
     ):
         super().__init__()
 
@@ -97,16 +98,23 @@ class PGRoleRetriever(BaseRetriever):
         self._logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self._bm25_limit: int = bm25_limit
         self._vector_limit: int = vector_limit
-        self._rerank_top_k: int = rerank_top_k
+        self._top_k: int = top_k
         self._embedding_instructions: str = embedding_instructions
+        self._use_reranker: bool = use_reranker
 
     @override
     def _get_relevant_documents(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, query: str, *, run_manager: CallbackManagerForRetrieverRun, user_roles: list[str]
+        self,
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun,
+        user_roles: list[str],
+        top_k: int | None = None,
     ) -> list[LangChainDocument]:
         """
         Retrieves and reranks documents using a single hybrid search SQL query.
         """
+        top_k = top_k or self._top_k
 
         query_embedding: list[float] = (
             self._embedding_client.embeddings.create(
@@ -160,30 +168,31 @@ class PGRoleRetriever(BaseRetriever):
             )
             for chunk in ordered_chunks
         ]
-        return reranked_docs[: self._rerank_top_k]
+        return reranked_docs[:top_k]
 
-        docs_to_rerank: list[str] = [chunk.chunk_text for chunk in ordered_chunks]
+        if self._use_reranker:
+            docs_to_rerank: list[str] = [chunk.chunk_text for chunk in ordered_chunks]
 
-        reranked_docs_result: V2RerankResponse = self._reranker_client.rerank(
-            model=self._reranker_model, query=query, documents=docs_to_rerank, top_n=self._rerank_top_k
-        )
-
-        reranked_docs: list[LangChainDocument] = [
-            LangChainDocument(
-                page_content=ordered_chunks[doc.index].chunk_text,
-                metadata={
-                    "file_name": ordered_chunks[doc.index].document.file_name,
-                    "document_path": ordered_chunks[doc.index].document.document_path,
-                    "mime_type": ordered_chunks[doc.index].document.mime_type,
-                    "page": ordered_chunks[doc.index].page_number,
-                    "num_pages": ordered_chunks[doc.index].document.num_pages,
-                    "access_roles": ordered_chunks[doc.index].document.access_roles,
-                    "created_at": ordered_chunks[doc.index].document.created_at.isoformat(),
-                    "id": ordered_chunks[doc.index].document.id,
-                    "chunk_id": ordered_chunks[doc.index].id,
-                },
+            reranked_docs_result: V2RerankResponse = self._reranker_client.rerank(
+                model=self._reranker_model, query=query, documents=docs_to_rerank, top_n=self._rerank_top_k
             )
-            for doc in reranked_docs_result.results
-        ]
 
-        return reranked_docs
+            reranked_docs: list[LangChainDocument] = [
+                LangChainDocument(
+                    page_content=ordered_chunks[doc.index].chunk_text,
+                    metadata={
+                        "file_name": ordered_chunks[doc.index].document.file_name,
+                        "document_path": ordered_chunks[doc.index].document.document_path,
+                        "mime_type": ordered_chunks[doc.index].document.mime_type,
+                        "page": ordered_chunks[doc.index].page_number,
+                        "num_pages": ordered_chunks[doc.index].document.num_pages,
+                        "access_roles": ordered_chunks[doc.index].document.access_roles,
+                        "created_at": ordered_chunks[doc.index].document.created_at.isoformat(),
+                        "id": ordered_chunks[doc.index].document.id,
+                        "chunk_id": ordered_chunks[doc.index].id,
+                    },
+                )
+                for doc in reranked_docs_result.results
+            ]
+
+            return reranked_docs

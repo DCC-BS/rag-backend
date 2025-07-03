@@ -110,14 +110,18 @@ async def chat(
 
 
 @app.get("/documents", response_model=DocumentListResponse)
-async def get_user_documents(
+async def search_documents(
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
+    query: str | None = None,
+    limit: int = 10,
 ) -> DocumentListResponse:
-    """Get all documents accessible by the current user."""
-    documents_data = document_service.get_user_documents(current_user.organizations)
-    documents = [DocumentMetadata(**doc) for doc in documents_data]
+    if query is None:
+        documents_data = document_service.get_user_documents(current_user.organizations)
+    else:
+        documents_data = document_service.search_documents(query, current_user.organizations, limit)
 
+    documents = [DocumentMetadata(**doc) for doc in documents_data]
     return DocumentListResponse(documents=documents, total_count=len(documents))
 
 

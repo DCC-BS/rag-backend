@@ -4,10 +4,12 @@ from typing import Any, NoReturn
 
 import structlog
 from fastapi import HTTPException, UploadFile, status
+from langchain_core.documents import Document as LangChainDocument
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
 from rag.connectors.docling_loader import DoclingLoader
+from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.document import Document
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
@@ -31,6 +33,16 @@ class DocumentManagementService:
 
         # S3 utilities setup
         self.s3_utils = S3Utils(config)
+
+        self.retriever = PGRoleRetriever(
+            embedding_api=self.config.EMBEDDINGS.API_URL,
+            embedding_instructions=self.config.EMBEDDINGS.EMBEDDING_INSTRUCTIONS,
+            reranker_api=self.config.RERANKER.API_URL,
+            bm25_limit=20,
+            vector_limit=20,
+            top_k=5,
+            use_reranker=False,
+        )
 
     @staticmethod
     def _raise_document_not_found() -> NoReturn:
@@ -128,15 +140,27 @@ class DocumentManagementService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve document"
             ) from e
 
-    def _validate_file(self, filename: str, bucket_name: str, object_key: str) -> str | None:
-        # Ensure bucket exists
-        self.s3_utils.ensure_bucket_exists(bucket_name)
-        # Check if file already exists
-        if self.s3_utils.object_exists(bucket_name, object_key):
-            return f"File already exists: {filename}"
-        # Check if supported file type
-        if "." + filename.split(".")[-1] not in DoclingLoader.SUPPORTED_FORMATS:
-            return f"Unsupported file type: {filename.split(".")[-1]}"
+    def search_documents(self, query: str, access_roles: list[str], limit: int) -> list[dict[str, Any]]:
+        """Search documents by query.
+
+        Args:
+            query: Search query
+            access_roles: List of access roles for the user
+            limit: Maximum number of documents to return
+
+        Returns:
+            List of document metadata dictionaries
+        """
+        try:
+            documents: list[LangChainDocument] = self.retriever.get_relevant_documents(
+                query=query, user_roles=access_roles, top_k=limit
+            )
+            return [doc.metadata for doc in documents]
+        except Exception as e:
+            self.logger.exception("Failed to search documents", query=query, error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to search documents"
+            ) from e
 
     def upload_document(self, file: UploadFile, access_role: str, user_access_roles: list[str]) -> dict[str, Any]:
         """Upload a new document to S3.
@@ -351,3 +375,13 @@ class DocumentManagementService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update document"
             ) from e
+
+    def _validate_file(self, filename: str, bucket_name: str, object_key: str) -> str | None:
+        # Ensure bucket exists
+        self.s3_utils.ensure_bucket_exists(bucket_name)
+        # Check if file already exists
+        if self.s3_utils.object_exists(bucket_name, object_key):
+            return f"File already exists: {filename}"
+        # Check if supported file type
+        if "." + filename.split(".")[-1] not in DoclingLoader.SUPPORTED_FORMATS:
+            return f"Unsupported file type: {filename.split(".")[-1]}"
