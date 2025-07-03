@@ -209,13 +209,11 @@ class DocumentManagementService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload document"
             ) from e
 
-    def delete_document(self, document_id: int, access_role: str, user_access_roles: list[str]) -> dict[str, str]:
+    def delete_document(self, document_id: int, user_access_roles: list[str]) -> dict[str, str]:
         """Delete a document from both S3 and database.
 
         Args:
             document_id: ID of the document to delete
-            access_role: Access role context for the operation
-            user_access_roles: User's access roles for validation
 
         Returns:
             Dictionary with deletion result
@@ -223,10 +221,6 @@ class DocumentManagementService:
         Raises:
             HTTPException: If document not found, access denied, or deletion fails
         """
-        # Validate user has access to the specified role
-        if access_role not in user_access_roles:
-            self._raise_access_denied(f"Access denied to role: {access_role}")
-
         try:
             with Session(self.engine) as session:
                 # Find document and verify access
@@ -237,7 +231,7 @@ class DocumentManagementService:
                     self._raise_document_not_found()
 
                 # Check if user has access to this document through the specified role
-                if access_role not in document.access_roles:
+                if not any(role in document.access_roles for role in user_access_roles):
                     self._raise_access_denied("Access denied to this document in the specified role")
 
                 # Extract bucket and object key from document_path

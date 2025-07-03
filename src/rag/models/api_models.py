@@ -34,12 +34,6 @@ class UpdateDocumentRequest(BaseModel):
     access_role: str
 
 
-class DeleteDocumentRequest(BaseModel):
-    """Request model for document deletion."""
-
-    access_role: str
-
-
 class DocumentOperationResponse(BaseModel):
     """Generic response model for document operations."""
 

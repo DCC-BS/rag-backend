@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from rag.auth import get_current_user
 from rag.models.api_models import (
-    DeleteDocumentRequest,
     DocumentListResponse,
     DocumentMetadata,
     DocumentOperationResponse,
@@ -195,12 +194,11 @@ async def update_document(
 @app.delete("/documents/{document_id}", response_model=DocumentOperationResponse)
 async def delete_document(
     document_id: int,
-    delete_request: DeleteDocumentRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
 ) -> DocumentOperationResponse:
     """Delete a document from S3 and database."""
-    result = document_service.delete_document(document_id, delete_request.access_role, current_user.organizations)
+    result = document_service.delete_document(document_id, current_user.organizations)
 
     return DocumentOperationResponse(
         message=result["message"], document_id=result["document_id"], file_name=result["file_name"]
