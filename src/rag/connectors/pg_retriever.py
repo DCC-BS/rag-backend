@@ -38,15 +38,17 @@ class PGRoleRetriever(BaseRetriever):
                 SELECT id, RANK() OVER (ORDER BY score DESC) as rank
                 FROM (
                     SELECT id, paradedb.score(id) AS score
-                    FROM document_chunks
+                    FROM document_chunks dc
                     WHERE chunk_text @@@ :query_text
+                    AND (:document_ids IS NULL OR dc.document_id = ANY(:document_ids))
                     ORDER BY score DESC
                     LIMIT :bm25_limit
                 ) AS bm25_scores
             ),
             semantic_ranked AS (
                 SELECT id, RANK() OVER (ORDER BY embedding <=> :embedding) AS rank
-                FROM document_chunks
+                FROM document_chunks dc
+                WHERE (:document_ids IS NULL OR dc.document_id = ANY(:document_ids))
                 ORDER BY embedding <=> :embedding
                 LIMIT :vector_limit
             )
@@ -58,6 +60,7 @@ class PGRoleRetriever(BaseRetriever):
             JOIN document_chunks dc ON dc.id = COALESCE(sr.id, br.id)
             JOIN documents d ON d.id = dc.document_id
             WHERE d.access_roles && :access_roles
+            AND (:document_ids IS NULL OR d.id = ANY(:document_ids))
             ORDER BY score DESC
             LIMIT :final_limit;
         """)
@@ -68,6 +71,7 @@ class PGRoleRetriever(BaseRetriever):
         bindparam("embedding", type_=Vector(dim=1024)),
         bindparam("vector_limit", type_=Integer),
         bindparam("access_roles", type_=ARRAY(Text)),
+        bindparam("document_ids", type_=ARRAY(Integer)),
         bindparam("final_limit", type_=Integer),
     )
 
@@ -109,6 +113,7 @@ class PGRoleRetriever(BaseRetriever):
         *,
         run_manager: CallbackManagerForRetrieverRun,
         user_roles: list[str],
+        document_ids: list[int] | None = None,
         top_k: int | None = None,
     ) -> list[LangChainDocument]:
         """
@@ -129,6 +134,7 @@ class PGRoleRetriever(BaseRetriever):
             "embedding": query_embedding,  # pgvector expects a string
             "vector_limit": self._vector_limit,
             "access_roles": user_roles,
+            "document_ids": document_ids,
             "final_limit": max(self._bm25_limit, self._vector_limit),
         }
 

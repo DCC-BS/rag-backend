@@ -32,6 +32,7 @@ class RetrieveAction(ActionProtocol):
         docs: list[Document] = self.retriever.invoke(
             input=state["input"],
             user_roles=state["user_organizations"],
+            document_ids=state["document_ids"],
             config=config,
         )
 

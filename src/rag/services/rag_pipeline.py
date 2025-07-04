@@ -122,6 +122,7 @@ class SHRAGPipeline:
         message: str | None,
         user_organizations: list[str] | None,
         thread_id: str | None,
+        document_ids: list[int] | None,
     ) -> RAGState:
         if message is None or user_organizations is None or user_organizations == [] or thread_id is None:
             raise ValueError("message, user_organizations, and thread_id are required for new queries")
@@ -129,6 +130,7 @@ class SHRAGPipeline:
         return RAGState(
             input=message,
             user_organizations=user_organizations,
+            document_ids=document_ids,
             messages=[],
             context=[],
             hallucination_score=None,
@@ -176,10 +178,11 @@ class SHRAGPipeline:
         message: str | None = None,
         user_organizations: list[str] | None = None,
         thread_id: str | None = None,
+        document_ids: list[int] | None = None,
     ) -> AsyncIterator[StreamResponse]:
         if user_organizations is None:
             user_organizations = []
-        user_input: RAGState = self._prepare_user_input(message, user_organizations, thread_id)
+        user_input: RAGState = self._prepare_user_input(message, user_organizations, thread_id, document_ids)
         # thread_id is validated by _prepare_user_input for its necessity.
         # It must be non-None if execution reaches here without an error.
         if thread_id is None:

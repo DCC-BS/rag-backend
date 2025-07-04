@@ -13,6 +13,7 @@ class InputState(TypedDict):
 
     input: str
     user_organizations: list[str]
+    document_ids: list[int] | None
 
 
 class RouteQuery(BaseModel):

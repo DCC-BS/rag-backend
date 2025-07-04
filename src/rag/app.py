@@ -70,6 +70,7 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]
 class ChatMessage(BaseModel):
     message: str
     thread_id: str = "default"
+    document_ids: list[int] | None = None
 
 
 @app.post("/chat")
@@ -81,9 +82,10 @@ async def chat(
     async def event_generator() -> AsyncGenerator[str, Any]:
         try:
             async for event in pipeline.astream_query(
-                chat_message.message,
-                current_user.organizations,
-                chat_message.thread_id,
+                message=chat_message.message,
+                user_organizations=current_user.organizations,
+                thread_id=chat_message.thread_id,
+                document_ids=chat_message.document_ids,
             ):
                 yield f"{event.model_dump_json()}{CONST_SPLIT_STRING}"
 
@@ -93,7 +95,6 @@ async def chat(
                 extra={
                     "user": current_user.username,
                     "thread_id": chat_message.thread_id,
-                    "message": chat_message.message,
                     "error": str(e),
                 },
                 exc_info=True,

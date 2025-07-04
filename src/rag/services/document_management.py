@@ -153,8 +153,8 @@ class DocumentManagementService:
             List of document metadata dictionaries
         """
         try:
-            documents: list[LangChainDocument] = self.retriever.get_relevant_documents(
-                query=query, user_roles=access_roles, top_k=limit
+            documents: list[LangChainDocument] = self.retriever.invoke(
+                input=query, user_roles=access_roles, top_k=limit
             )
             return [doc.metadata for doc in documents]
         except Exception as e:
