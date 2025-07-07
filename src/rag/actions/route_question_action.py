@@ -44,7 +44,7 @@ class RouteQuestionAction(ActionProtocol):
 
         self.logger.info("---ROUTE QUESTION---")
         writer = get_stream_writer()
-        writer("Entscheide, ob wir erst Dokumente suchen müssen...")
+        writer("Entscheide, ob wir Dokumente suchen müssen...")
         if "context" not in state or state["context"] is None:
             self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(

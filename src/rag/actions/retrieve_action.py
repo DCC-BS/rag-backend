@@ -3,7 +3,6 @@ from typing import Any, Protocol
 import structlog
 from langchain.schema import Document
 from langchain_core.runnables import RunnableConfig
-from langgraph.config import get_stream_writer
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
@@ -27,8 +26,6 @@ class RetrieveAction(ActionProtocol):
 
     def __call__(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         self.logger.info("---RETRIEVE DOCUMENTS---")
-        writer = get_stream_writer()
-        writer("Suche relevante Dokumente...")
         docs: list[Document] = self.retriever.invoke(
             input=state["input"],
             user_roles=state["user_organizations"],
