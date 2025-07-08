@@ -155,8 +155,6 @@ async def upload_document(
     results: dict[str, list[str]] = {"failed": [], "success": []}
     # Only raise an exception if we are handling single file upload
     raise_exception: bool = len(files) == 1
-    print(len(files))
-    print(raise_exception)
     for file in files:
         try:
             _ = document_service.upload_document(file, access_role, current_user.organizations)

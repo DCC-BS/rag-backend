@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, override
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -9,7 +9,7 @@ from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import GradeAnswer, RAGState
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 
 
 class GradeAnswerAction(ActionProtocol):
@@ -22,6 +22,7 @@ class GradeAnswerAction(ActionProtocol):
         self.llm = llm
         self.structured_llm_grade_answer = self.llm.with_structured_output(GradeAnswer, method="json_schema")
 
+    @override
     def __call__(self, state: RAGState, config: RunnableConfig):
         """
         Grade answer generation.
@@ -42,7 +43,7 @@ class GradeAnswerAction(ActionProtocol):
         )
         answer_grader = answer_prompt | self.structured_llm_grade_answer
         writer = get_stream_writer()
-        writer("Bewerte Antwortqualität...")
+        writer("chat.status.gradingAnswer")
         answer_result: GradeAnswer = answer_grader.invoke(
             {"answer": state["messages"][-1].content, "question": state["input"]}, config
         )  # pyright: ignore[reportAssignmentType]
@@ -61,12 +62,16 @@ class GradeAnswerAction(ActionProtocol):
                 },
             )
 
+    @override
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_status(
-            message="Antwort ist relevant",
-            sender="GradeAnswerAction",
-            decision="Ja" if data.get("answer_score") == "yes" else "Nein. Begründung: " + data.get("reason", ""),
+        is_truthful = data.get("answer_score", "").lower() == "yes"
+        return StreamResponse.create_decision_response(
+            sender=Sender.GRADE_ACTION,
+            metadata={
+                "decision": is_truthful,
+                "reason": "" if is_truthful else "Begründung: " + data.get("reason", ""),
+            },
         )

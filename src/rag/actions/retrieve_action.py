@@ -1,4 +1,4 @@
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 import structlog
 from langchain.schema import Document
@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 
 
 class RetrieverProtocol(Protocol):
@@ -24,6 +24,7 @@ class RetrieveAction(ActionProtocol):
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.retriever = retriever
 
+    @override
     def __call__(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         self.logger.info("---RETRIEVE DOCUMENTS---")
         docs: list[Document] = self.retriever.invoke(
@@ -35,10 +36,9 @@ class RetrieveAction(ActionProtocol):
 
         return {"context": docs}
 
+    @override
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_document_response(
-            message="Relevante Dokumente gefunden", sender="RetrieveAction", docs=data.get("context", [])
-        )
+        return StreamResponse.create_document_response(sender=Sender.RETRIEVE_ACTION, docs=data.get("context", []))

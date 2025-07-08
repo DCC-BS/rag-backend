@@ -9,7 +9,7 @@ from langgraph.types import Command
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import GradeHallucination, RAGState
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 
 
 class GradeHallucinationAction(ActionProtocol):
@@ -45,7 +45,7 @@ class GradeHallucinationAction(ActionProtocol):
             raise ValueError("Context is None")
 
         writer = get_stream_writer()
-        writer("Überprüfe auf Halluzinationen...")
+        writer("chat.status.gradingHallucination")
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
                 "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
@@ -69,8 +69,11 @@ class GradeHallucinationAction(ActionProtocol):
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_status(
-            message="Antwort enthält Halluzinationen",
-            sender="GradeHallucinationAction",
-            decision="Ja" if data.get("hallucination_score") else "Nein",
+        is_hallucination = data.get("hallucination_score", False)
+        return StreamResponse.create_decision_response(
+            sender=Sender.GRADE_HALLUCINATION_ACTION,
+            metadata={
+                "decision": is_hallucination,
+                "reason": "Contains hallucination" if is_hallucination else "No hallucination",
+            },
         )

@@ -18,7 +18,7 @@ from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.rag_states import (
     RAGState,
 )
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.model_clients import get_llm_client
 
@@ -158,9 +158,7 @@ class SHRAGPipeline:
         if not isinstance(metadata, dict) or metadata.get("langgraph_node") != "generate_answer":
             return None
 
-        return StreamResponse.create_answer_response(
-            message="AI Antwort", sender="GenerateAnswerAction", answer_text=message_chunk.content
-        )
+        return StreamResponse.create_answer_response(sender=Sender.ANSWER_ACTION, answer_text=message_chunk.content)
 
     def _setup_retriever(self):
         retriever = PGRoleRetriever(
@@ -195,8 +193,7 @@ class SHRAGPipeline:
             input=user_input, stream_mode=["updates", "messages", "custom"], config=config
         ):
             if kind == "custom":
-                self.logger.info(f"Custom event: {stream_content}")
-                yield StreamResponse.create_status(message=stream_content, sender="SHRAGPipeline")
+                yield StreamResponse.create_status(translation_key=stream_content)
             if kind == "updates" and isinstance(stream_content, dict):
                 for response in self._handle_updates_event(stream_content):
                     yield response

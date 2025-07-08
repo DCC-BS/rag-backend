@@ -109,7 +109,7 @@ services:
       - rag-network
 
   llm:
-    image: vllm/vllm-openai:v0.9.1
+    image: vllm/vllm-openai:v0.9.2
     container_name: vllm-qwen3-32b
     deploy:
       resources:
@@ -160,7 +160,7 @@ services:
       - rag-network
 
   reranker:
-    image: vllm/vllm-openai:v0.9.1
+    image: vllm/vllm-openai:v0.9.2
     container_name: vllm-reranker
     deploy:
       resources:
@@ -183,6 +183,7 @@ services:
       - "Qwen/Qwen3-Reranker-0.6B"
       - "--task=score"
       - "--gpu-memory-utilization=0.15"
+      - "--hf_overrides '{\"architectures\": [\"Qwen3ForSequenceClassification\"],\"classifier_from_token\": [\"no\", \"yes\"],\"is_original_qwen3_reranker\": true}'"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -194,7 +195,7 @@ services:
       - rag-network
 
   embedding:
-    image: vllm/vllm-openai:v0.9.1
+    image: vllm/vllm-openai:v0.9.2
     container_name: vllm-embedding
     deploy:
       resources:

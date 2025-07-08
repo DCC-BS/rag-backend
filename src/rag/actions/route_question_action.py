@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any, Literal, override
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 
 
 class RouteDecision(BaseModel):
@@ -31,6 +31,7 @@ class RouteQuestionAction(ActionProtocol):
         self.llm = llm
         self.structured_llm_router = self.llm.with_structured_output(schema=RouteDecision, method="json_schema")
 
+    @override
     def __call__(self, state: RAGState, config: RunnableConfig) -> Command[Literal["generate_answer", "retrieve"]]:
         """
         Route question to web search or RAG.
@@ -44,7 +45,7 @@ class RouteQuestionAction(ActionProtocol):
 
         self.logger.info("---ROUTE QUESTION---")
         writer = get_stream_writer()
-        writer("Entscheide, ob wir Dokumente suchen müssen...")
+        writer("chat.status.routingQuestion")
         if "context" not in state or state["context"] is None:
             self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
@@ -93,7 +94,8 @@ class RouteQuestionAction(ActionProtocol):
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_status(
-            message=f"{"Suche relevante Dokumente" if data.get("route_query") == "retrieval" else "Antworte auf die Frage"}",
-            sender="RouteQuestionAction",
+        should_retrieve: bool = data.get("route_query") == "retrieval"
+        return StreamResponse.create_decision_response(
+            sender=Sender.ROUTE_QUESTION_ACTION,
+            metadata={"decision": should_retrieve, "reason": "Retrieval" if should_retrieve else "Answer"},
         )

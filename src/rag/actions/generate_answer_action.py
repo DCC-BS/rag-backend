@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, override
 
 import structlog
 from langchain.prompts import ChatPromptTemplate
@@ -11,7 +11,7 @@ from langgraph.config import get_stream_writer
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
-from rag.models.stream_response import StreamResponse
+from rag.models.stream_response import Sender, StreamResponse
 from rag.tools.calculator import add, divide, multiply, square, subtract
 
 
@@ -62,6 +62,7 @@ class GenerateAnswerAction(ActionProtocol):
         self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
         self.llm = llm.bind_tools([multiply, add, subtract, divide, square])
 
+    @override
     def __call__(self, state: RAGState, config: RunnableConfig):
         """
         Generate an answer based on the context and question.
@@ -102,14 +103,13 @@ class GenerateAnswerAction(ActionProtocol):
         prompt = template.invoke({"context": context, "input": state["input"]}, config)
         messages: list[BaseMessage] = list(state["messages"]) + list(prompt.to_messages())
         writer = get_stream_writer()
-        writer("Generiere Antwort...")
+        writer("chat.status.generatingAnswer")
         response = self.llm.invoke(messages, config)
         return {"messages": [*messages, response]}
 
+    @override
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
         """
-        return StreamResponse.create_answer_response(
-            message="AI Antwort", sender="GenerateAnswerAction", answer_text=data.get("answer", "")
-        )
+        return StreamResponse.create_answer_response(sender=Sender.ANSWER_ACTION, answer_text=data.get("answer", ""))
