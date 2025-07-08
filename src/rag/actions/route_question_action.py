@@ -90,6 +90,7 @@ class RouteQuestionAction(ActionProtocol):
         else:
             raise ValueError(f"Unexpected routing next step: {routing_result.next_step}")
 
+    @override
     def update_handler(self, data: dict[str, Any]) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.

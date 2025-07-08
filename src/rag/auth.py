@@ -1,11 +1,10 @@
-import base64
 import os
 from typing import Annotated, Any
 
 import httpx
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OpenIdConnect
 from jose import (
     exceptions as jose_exceptions,
@@ -70,11 +69,11 @@ oauth2_scheme = OpenIdConnect(
 def _validate_and_decode_id_token(
     token: str,
     jwks: dict[str, list[dict[str, Any]]],
-    access_token_from_header: str | None,
     audience: str | None,
     credentials_exception: HTTPException,
 ) -> dict[str, Any]:
     try:
+        token = token.replace("Bearer ", "")
         unverified_header = jwt.get_unverified_header(token)
     except jose_exceptions.JWTError as e:
         raise credentials_exception from e
@@ -93,60 +92,21 @@ def _validate_and_decode_id_token(
     if not rsa_key:
         raise credentials_exception
 
-    if "at_hash" in jwt.get_unverified_claims(token) and not access_token_from_header:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="X-Access-Token header is missing for at_hash validation when at_hash claim is present in ID Token.",
-        )
-
     # jwt.decode can raise ExpiredSignatureError, JWTClaimsError, JWTError
+    expected_issuer = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}/v2.0"
     payload = jwt.decode(
         token,
         rsa_key,
         algorithms=["RS256"],
         audience=audience,
-        options={"verify_iss": False},  # Disable default issuer validation for common endpoint
-        access_token=access_token_from_header,
+        issuer=expected_issuer,
     )
-
-    # Manual issuer validation based on tid
-    token_issuer = payload.get("iss")
-    token_tid = payload.get("tid")
-
-    if not token_issuer or not token_tid:
-        raise credentials_exception  # Missing iss or tid claim
-
-    expected_issuer = f"https://login.microsoftonline.com/{token_tid}/v2.0"
-    if token_issuer != expected_issuer:
-        raise credentials_exception  # Issuer does not match tenant ID
 
     return payload
 
 
-async def _get_user_photo(token: str) -> str | None:
-    """Fetches user's photo from MS Graph and returns it as a data URI."""
-    graph_photo_url = "https://graph.microsoft.com/v1.0/me/photo/$value"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(
-                graph_photo_url,
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            if response.status_code == 200:
-                photo_data = await response.aread()
-                content_type = response.headers.get("Content-Type", "image/jpeg")
-                encoded_photo = base64.b64encode(photo_data).decode("utf-8")
-                return f"data:{content_type};base64,{encoded_photo}"
-        except httpx.RequestError:
-            # Log this maybe, but for now just return None
-            return None
-        else:
-            # If user has no photo, Graph API returns 404. We can ignore this.
-            # We also ignore other errors to not fail the login process.
-            return None
-
-
 def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HTTPException) -> User:
+    print(payload)
     user_id_val: str | None = payload.get("sub")
     email: str | None = payload.get("email")
     picture: str | None = payload.get("picture")
@@ -176,7 +136,6 @@ def _create_user_from_payload(payload: dict[str, Any], credentials_exception: HT
 
 async def get_current_user(
     token: Annotated[str | None, Depends(oauth2_scheme)],
-    access_token_from_header: Annotated[str | None, Header(alias="X-Access-Token")] = None,
 ) -> User:
     if not token:
         raise HTTPException(
@@ -195,13 +154,10 @@ async def get_current_user(
         payload = _validate_and_decode_id_token(
             token,
             jwks,
-            access_token_from_header,
             AZURE_CLIENT_ID,
             credentials_exception,
         )
         user = _create_user_from_payload(payload, credentials_exception)
-        if not user.picture and access_token_from_header:
-            user.picture = await _get_user_photo(access_token_from_header)
     except jose_exceptions.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
