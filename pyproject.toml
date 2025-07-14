@@ -5,8 +5,9 @@ description = "RAG Bot für den Kanton Basel Stadt"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
-requires-python = ">=3.12,<4.0"
+requires-python = ">=3.13,<4.0"
 dependencies = [
+    "authentication-bs-py>=0.1.2",
     "docling>=2.15.0",
     "langchain-openai>=0.2.14",
     "langchain>=0.3.14",
@@ -57,6 +58,9 @@ dev = [
     "rich>=13.9.4",
     "pytest-asyncio>=0.26.0",
 ]
+
+[tool.uv.sources]
+authentication-bs-py = { git = "https://github.com/DCC-BS/authentication.bs.py", rev = "v0.1.2" }
 
 [build-system]
 requires = ["hatchling","version-pioneer>=0.0.13"]
@@ -175,3 +179,5 @@ exclude_also = [
     "@(abc\\. )?abstractmethod",
     "@(abc\\. )?abstractproperty"
 ]
+
+pythonpath = ["src"]

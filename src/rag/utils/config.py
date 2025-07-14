@@ -86,6 +86,9 @@ class AppConfig:
     INGESTION: IngestionConfig
     CHAT: ChatConfig
     ROLES: list[str]
+    CORS_ORIGINS: list[str]
+    AZURE_CLIENT_ID: str
+    AZURE_TENANT_ID: str
 
 
 class ConfigurationManager:

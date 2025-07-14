@@ -1,6 +1,13 @@
 APP_NAME: "RAG Bot"
 VERSION: "0.0.1"
 DESCRIPTION: "A Retrieval-Augmented Generation (RAG) bot for document-based queries."
+CORS_ORIGINS:
+  - "http://localhost"
+  - "http://localhost:8080"
+  - "http://localhost:8000"
+  - "${oc.env:CLIENT_URL}"
+AZURE_CLIENT_ID: "${oc.env:AZURE_CLIENT_ID}"
+AZURE_TENANT_ID: "${oc.env:AZURE_TENANT_ID}"
 RETRIEVER:
   BM25_LIMIT: 20
   VECTOR_LIMIT: 20
