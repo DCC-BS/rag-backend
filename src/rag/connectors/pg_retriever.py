@@ -106,6 +106,103 @@ class PGRoleRetriever(BaseRetriever):
         self._embedding_instructions: str = embedding_instructions
         self._use_reranker: bool = use_reranker
 
+    def _create_query_embedding(self, query: str) -> list[float]:
+        """Create an embedding for the given query."""
+        try:
+            response = self._embedding_client.embeddings.create(
+                input=self._embedding_instructions + query, model=self._embedding_model
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            self._logger.exception("Failed to create query embedding", error=e)
+            raise
+
+    def _execute_hybrid_search(
+        self,
+        query: str,
+        query_embedding: list[float],
+        user_roles: list[str],
+        document_ids: list[int] | None = None,
+    ) -> list[int]:
+        """Execute the hybrid search query and return ordered chunk IDs."""
+        params = {
+            "query_text": '"' + query + '"',
+            "bm25_limit": self._bm25_limit,
+            "embedding": query_embedding,
+            "vector_limit": self._vector_limit,
+            "access_roles": user_roles,
+            "document_ids": document_ids,
+            "final_limit": max(self._bm25_limit, self._vector_limit),
+        }
+
+        try:
+            with Session(self._engine) as session:
+                id_results = session.execute(self.id_query, params).all()
+                return [res.chunk_id for res in id_results]
+        except Exception as e:
+            self._logger.exception("Failed to execute hybrid search", error=e)
+            raise
+
+    def _fetch_document_chunks(self, chunk_ids: list[int]) -> list[DocumentChunk]:
+        """Fetch document chunks by their IDs in the specified order."""
+        if not chunk_ids:
+            return []
+
+        try:
+            with Session(self._engine) as session:
+                statement: Select[Any] = (
+                    select(DocumentChunk)
+                    .options(selectinload(DocumentChunk.document))
+                    .where(DocumentChunk.id.in_(chunk_ids))
+                )
+
+                fetched_chunks: Sequence[DocumentChunk] = session.execute(statement).scalars().all()
+                chunks_by_id: dict[int, DocumentChunk] = {chunk.id: chunk for chunk in fetched_chunks}
+
+                # Maintain the original order from the search results
+                return [chunks_by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks_by_id]
+        except Exception as e:
+            self._logger.exception("Failed to fetch document chunks", chunk_ids=chunk_ids, error=e)
+            raise
+
+    def _rerank_documents(self, query: str, chunks: list[DocumentChunk], top_k: int) -> list[DocumentChunk]:
+        """Rerank documents using the reranker model."""
+        if not chunks:
+            return []
+
+        try:
+            docs_to_rerank: list[str] = [chunk.chunk_text for chunk in chunks]
+
+            reranked_result: V2RerankResponse = self._reranker_client.rerank(
+                model=self._reranker_model, query=query, documents=docs_to_rerank, top_n=top_k
+            )
+
+            return [chunks[doc.index] for doc in reranked_result.results]
+        except Exception as e:
+            self._logger.exception("Failed to rerank documents", error=e)
+            raise
+
+    def _create_langchain_document(self, chunk: DocumentChunk) -> LangChainDocument:
+        """Create a LangChain document from a DocumentChunk."""
+        return LangChainDocument(
+            page_content=chunk.chunk_text,
+            metadata={
+                "file_name": chunk.document.file_name,
+                "document_path": chunk.document.document_path,
+                "mime_type": chunk.document.mime_type,
+                "page": chunk.page_number,
+                "num_pages": chunk.document.num_pages,
+                "access_roles": chunk.document.access_roles,
+                "created_at": chunk.document.created_at.isoformat(),
+                "id": chunk.document.id,
+                "chunk_id": chunk.id,
+            },
+        )
+
+    def _convert_chunks_to_documents(self, chunks: list[DocumentChunk]) -> list[LangChainDocument]:
+        """Convert a list of DocumentChunks to LangChain documents."""
+        return [self._create_langchain_document(chunk) for chunk in chunks]
+
     @override
     def _get_relevant_documents(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
@@ -121,84 +218,19 @@ class PGRoleRetriever(BaseRetriever):
         """
         top_k = top_k or self._top_k
 
-        query_embedding: list[float] = (
-            self._embedding_client.embeddings.create(
-                input=self._embedding_instructions + query, model=self._embedding_model
-            )
-            .data[0]
-            .embedding
-        )
-        params = {
-            "query_text": '"' + query + '"',
-            "bm25_limit": self._bm25_limit,
-            "embedding": query_embedding,  # pgvector expects a string
-            "vector_limit": self._vector_limit,
-            "access_roles": user_roles,
-            "document_ids": document_ids,
-            "final_limit": max(self._bm25_limit, self._vector_limit),
-        }
+        query_embedding = self._create_query_embedding(query)
 
-        with Session(self._engine) as session:
-            id_results = session.execute(self.id_query, params).all()
-            if not id_results:
-                self._logger.warning(f"No results found for query: {query}")
-                return []
-            ordered_chunk_ids: list[int] = [res.chunk_id for res in id_results]
-            statement: Select[Any] = (
-                select(DocumentChunk)
-                .options(selectinload(DocumentChunk.document))
-                .where(DocumentChunk.id.in_(ordered_chunk_ids))
-            )
+        chunk_ids = self._execute_hybrid_search(query, query_embedding, user_roles, document_ids)
 
-            fetched_chunks: Sequence[DocumentChunk] = session.execute(statement).scalars().all()
-            chunks_by_id: dict[int, DocumentChunk] = {chunk.id: chunk for chunk in fetched_chunks}
-            ordered_chunks: list[DocumentChunk] = [
-                chunks_by_id[cid] for cid in ordered_chunk_ids if cid in chunks_by_id
-            ]
+        if not chunk_ids:
+            self._logger.warning("No results found for query", query=query)
+            return []
 
-        # TODO: Right now vllm reranker is not working, so we just return the ordered chunks
-        reranked_docs: list[LangChainDocument] = [
-            LangChainDocument(
-                page_content=chunk.chunk_text,
-                metadata={
-                    "file_name": chunk.document.file_name,
-                    "document_path": chunk.document.document_path,
-                    "mime_type": chunk.document.mime_type,
-                    "page": chunk.page_number,
-                    "num_pages": chunk.document.num_pages,
-                    "access_roles": chunk.document.access_roles,
-                    "created_at": chunk.document.created_at.isoformat(),
-                    "id": chunk.document.id,
-                    "chunk_id": chunk.id,
-                },
-            )
-            for chunk in ordered_chunks
-        ]
-        return reranked_docs[:top_k]
+        ordered_chunks = self._fetch_document_chunks(chunk_ids)
 
         if self._use_reranker:
-            docs_to_rerank: list[str] = [chunk.chunk_text for chunk in ordered_chunks]
+            final_chunks = self._rerank_documents(query, ordered_chunks, top_k)
+        else:
+            final_chunks = ordered_chunks[:top_k]
 
-            reranked_docs_result: V2RerankResponse = self._reranker_client.rerank(
-                model=self._reranker_model, query=query, documents=docs_to_rerank, top_n=self._rerank_top_k
-            )
-
-            reranked_docs: list[LangChainDocument] = [
-                LangChainDocument(
-                    page_content=ordered_chunks[doc.index].chunk_text,
-                    metadata={
-                        "file_name": ordered_chunks[doc.index].document.file_name,
-                        "document_path": ordered_chunks[doc.index].document.document_path,
-                        "mime_type": ordered_chunks[doc.index].document.mime_type,
-                        "page": ordered_chunks[doc.index].page_number,
-                        "num_pages": ordered_chunks[doc.index].document.num_pages,
-                        "access_roles": ordered_chunks[doc.index].document.access_roles,
-                        "created_at": ordered_chunks[doc.index].document.created_at.isoformat(),
-                        "id": ordered_chunks[doc.index].document.id,
-                        "chunk_id": ordered_chunks[doc.index].id,
-                    },
-                )
-                for doc in reranked_docs_result.results
-            ]
-
-            return reranked_docs
+        return self._convert_chunks_to_documents(final_chunks)
