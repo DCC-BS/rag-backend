@@ -41,15 +41,15 @@ class GradeHallucinationAction(ActionProtocol):
             ("user", "Retrieved documents: {documents} \\n Answer: {answer}"),
         ])
         hallucination_grader = hallucination_prompt | self.structured_llm_grade_hallucination
-        if state["context"] is None:
+        if state.context is None:
             raise ValueError("Context is None")
 
         writer = get_stream_writer()
         writer("chat.status.gradingHallucination")
         hallucination_result: GradeHallucination = hallucination_grader.invoke(
             {
-                "documents": "\n\n".join([doc.page_content for doc in state["context"]]),
-                "answer": state["messages"][-1].content,
+                "documents": "\n\n".join([doc.page_content for doc in state.context]),
+                "answer": state.messages[-1].content,
             },
             config,
         )  # pyright: ignore[reportAssignmentType]

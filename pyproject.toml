@@ -12,7 +12,6 @@ dependencies = [
     "langchain-openai>=0.2.14",
     "langchain>=0.3.14",
     "omegaconf>=2.3.0",
-    "rich>=13.9.4",
     "transformers>=4.47.0",
     "langgraph>=0.2.63",
     "fastapi[standard]>=0.115.8",
@@ -52,7 +51,6 @@ dev = [
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
-    "rich>=13.9.4",
     "pytest-asyncio>=0.26.0",
 ]
 

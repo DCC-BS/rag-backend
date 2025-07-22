@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import TextClause
 
-from rag.models.document import DocumentChunk
+from rag.models.db_document import DocumentChunk
 from rag.utils.db import get_db_url
 from rag.utils.model_clients import get_embedding_client, get_reranker_client
 

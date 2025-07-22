@@ -148,7 +148,7 @@ def run_dry_run_cleanup(ingestion_service: S3DocumentIngestionService) -> dict[s
     from sqlalchemy import select
     from sqlalchemy.orm import Session
 
-    from rag.models.document import Document
+    from rag.models.db_document import Document
 
     logger = structlog.get_logger()
     logger.info("Starting dry-run cleanup of orphaned documents")

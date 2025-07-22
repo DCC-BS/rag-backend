@@ -34,7 +34,7 @@ class GradeAnswerAction(ActionProtocol):
             Give a binary score 'yes' or 'no' score to indicate whether the answer is relevant to the question.
             If the answer is relevant, return 'yes'. If the answer is not relevant, return 'no'.
             If the answer is not relevant, provide a reason for the grade.
-            Provide your reasoning for the grade in German."""
+            Provide your reasoning for the grade in the same language as the question and answer."""
         answer_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
             messages=[
                 ("system", system),
@@ -45,7 +45,7 @@ class GradeAnswerAction(ActionProtocol):
         writer = get_stream_writer()
         writer("chat.status.gradingAnswer")
         answer_result: GradeAnswer = answer_grader.invoke(
-            {"answer": state["messages"][-1].content, "question": state["input"]}, config
+            {"answer": state.messages[-1].content, "question": state.input}, config
         )  # pyright: ignore[reportAssignmentType]
         if answer_result.binary_score == "yes":
             self.logger.info("---ANSWER IS RELEVANT---")

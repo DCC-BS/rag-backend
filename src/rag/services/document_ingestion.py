@@ -12,7 +12,7 @@ from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, selectinload
 
 from rag.connectors.docling_loader import DoclingLoader
-from rag.models.document import Document, DocumentChunk
+from rag.models.db_document import Document, DocumentChunk
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
 from rag.utils.model_clients import get_embedding_client

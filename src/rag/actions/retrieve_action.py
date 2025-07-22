@@ -28,9 +28,9 @@ class RetrieveAction(ActionProtocol):
     def __call__(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
         self.logger.info("---RETRIEVE DOCUMENTS---")
         docs: list[Document] = self.retriever.invoke(
-            input=state["input"],
-            user_roles=state["user_organizations"],
-            document_ids=state["document_ids"],
+            input=state.input,
+            user_roles=state.user_organizations,
+            document_ids=state.document_ids,
             config=config,
         )
 

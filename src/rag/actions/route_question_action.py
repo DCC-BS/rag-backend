@@ -46,7 +46,7 @@ class RouteQuestionAction(ActionProtocol):
         self.logger.info("---ROUTE QUESTION---")
         writer = get_stream_writer()
         writer("chat.status.routingQuestion")
-        if "context" not in state or state["context"] is None:
+        if "context" not in state or state.context is None:
             self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},
@@ -58,7 +58,7 @@ class RouteQuestionAction(ActionProtocol):
         If you need more information, return "retrieval"."""
 
         context_messages: list[tuple[str, str | list[str | dict[Any, Any]]]] = [
-            (message.type, message.content) for message in state["messages"][1:]
+            (message.type, message.content) for message in state.messages[1:]
         ]
 
         route_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
@@ -73,7 +73,7 @@ class RouteQuestionAction(ActionProtocol):
         )
 
         question_router = route_prompt | self.structured_llm_router
-        routing_result: RouteDecision = question_router.invoke({"question": state["input"]}, config)  # pyright: ignore[reportAssignmentType]
+        routing_result: RouteDecision = question_router.invoke({"question": state.input}, config)  # pyright: ignore[reportAssignmentType]
 
         if routing_result.next_step == "answer":
             self.logger.info("---ROUTE QUESTION TO ANSWER GENERATION---")

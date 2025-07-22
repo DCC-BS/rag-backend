@@ -83,7 +83,7 @@ class SHRAGPipeline:
         # Add conditional edges for routing and grading
         _ = workflow.add_conditional_edges(
             source="route_question",
-            path=lambda state: state.get("route_query"),
+            path=lambda state: state.route_query,
             path_map={
                 "retrieval": "retrieve",
                 "answer": "generate_answer",
@@ -92,7 +92,7 @@ class SHRAGPipeline:
 
         _ = workflow.add_conditional_edges(
             source="retrieve",
-            path=lambda state: len(state.get("context", [])) > 0,
+            path=lambda state: len(state.context) > 0,
             path_map={
                 True: "generate_answer",
                 False: "backoff",
@@ -101,7 +101,7 @@ class SHRAGPipeline:
 
         # _ = workflow.add_conditional_edges(
         #     source="grade_hallucination",
-        #     path=lambda state: state.get("hallucination_score"),
+        #     path=lambda state: state.hallucination_score,
         #     path_map={
         #         True: "generate_answer",
         #         False: "grade_answer",
@@ -198,6 +198,7 @@ class SHRAGPipeline:
                 for response in self._handle_updates_event(stream_content):
                     yield response
             elif kind == "messages":
+                # print(stream_content)
                 response = self._handle_messages_event(stream_content)
                 if response:
                     yield response

@@ -27,6 +27,15 @@ from rag.services.document_management import DocumentManagementService
 from rag.services.rag_pipeline import SHRAGPipeline
 from rag.utils.config import ConfigurationManager
 
+structlog.configure(
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.dev.set_exc_info,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.dev.ConsoleRenderer(exception_formatter=structlog.dev.plain_traceback),
+    ]
+)
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 

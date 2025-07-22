@@ -1,14 +1,12 @@
-from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from langchain.schema import Document
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
 
 
-class InputState(TypedDict):
+class InputState(BaseModel):
     """Input state for the RAG pipeline."""
 
     input: str
@@ -24,10 +22,10 @@ class RouteQuery(BaseModel):
     )
 
 
-class OutputState(TypedDict):
+class OutputState(BaseModel):
     """Output state for the RAG pipeline."""
 
-    messages: Annotated[Sequence[BaseMessage], add_messages]
+    messages: Annotated[list[AnyMessage], add_messages]
     context: list[Document]
     hallucination_score: Literal["yes", "no"] | None
     answer_score: Literal["yes", "no"] | None

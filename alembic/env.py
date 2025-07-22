@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from rag.models.document import Base
+from rag.models.db_document import Base
 from rag.utils.db import get_db_url
 
 # Load environment variables from .env file

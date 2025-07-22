@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from rag.connectors.docling_loader import DoclingLoader
 from rag.connectors.pg_retriever import PGRoleRetriever
-from rag.models.document import Document
+from rag.models.db_document import Document
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
 from rag.utils.s3 import S3Utils
