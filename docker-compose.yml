@@ -64,6 +64,9 @@ services:
               device_ids: [ '0' ]
               capabilities: [gpu]
     environment:
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - CLIENT_URL=${CLIENT_URL}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -72,10 +75,13 @@ services:
       - LLM_URL=http://llm:8000/v1
       - RERANKER_URL=http://reranker:8000
       - EMBEDDING_URL=http://embedding:8000/v1
+      - BACKEND_PORT=${BACKEND_PORT}
+      - BACKEND_HOST=${BACKEND_HOST}
+      - BACKEND_DEV=${BACKEND_DEV}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
       - MINIO_ENDPOINT=http://minio:9000
-    command: ["uv", "run", "src/rag/cli/run_ingestion.py"]
+    command: ["uv", "run", "src/rag/cli/run_ingestion.py", "--verbose"]
     depends_on:
       paradedb:
         condition: service_healthy

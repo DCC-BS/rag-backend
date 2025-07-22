@@ -1,7 +1,7 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, ClassVar, Protocol, override
+from typing import Any, ClassVar, override
 
 import structlog
 from docling.chunking import HybridChunker  # pyright: ignore[reportPrivateImportUsage]
@@ -15,75 +15,42 @@ from docling.datamodel.pipeline_options import (
 )
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker.base import BaseChunk
+from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from docling_core.types.doc.document import DoclingDocument
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document as LCDocument
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.model_clients import get_embedding_client
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
-class DocumentConverterFactory(Protocol):
-    """Protocol for document converter factory."""
-
-    def create_converter(self) -> DocumentConverter:
-        """Create a document converter."""
-        ...
-
-
-class TokenizerFactory(Protocol):
-    """Protocol for tokenizer factory."""
-
-    def create_tokenizer(self) -> AutoTokenizer:
-        """Create a tokenizer."""
-        ...
-
-
-class DefaultDocumentConverterFactory:
-    """Default implementation of document converter factory."""
-
-    def __init__(self, config: AppConfig | None = None) -> None:
-        self.config: AppConfig = config or ConfigurationManager.get_config()
-
-    def create_converter(self) -> DocumentConverter:
-        """Create a document converter with default settings."""
-        accelerator_device: AcceleratorDevice = (
-            AcceleratorDevice.CUDA if self.config.DOCLING.USE_GPU else AcceleratorDevice.CPU
-        )
-        accelerator_options: AcceleratorOptions = AcceleratorOptions(
-            num_threads=int(self.config.DOCLING.NUM_THREADS), device=accelerator_device
-        )
-        return DocumentConverter(
-            allowed_formats=[
-                InputFormat.PDF,
-                InputFormat.DOCX,
-                InputFormat.PPTX,
-                InputFormat.HTML,
-                # InputFormat.XLSX,
-            ],
-            format_options={
-                InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=PdfPipelineOptions(
-                        do_table_structure=True,
-                        table_structure_options=TableStructureOptions(mode=TableFormerMode.ACCURATE),
-                        accelerator_options=accelerator_options,
-                    )
+def create_converter(config: AppConfig) -> DocumentConverter:
+    """Create a document converter with default settings."""
+    accelerator_device: AcceleratorDevice = AcceleratorDevice.CUDA if config.DOCLING.USE_GPU else AcceleratorDevice.CPU
+    accelerator_options: AcceleratorOptions = AcceleratorOptions(
+        num_threads=int(config.DOCLING.NUM_THREADS), device=accelerator_device
+    )
+    return DocumentConverter(
+        allowed_formats=[
+            InputFormat.PDF,
+            InputFormat.DOCX,
+            InputFormat.PPTX,
+            InputFormat.HTML,
+            # InputFormat.XLSX,
+        ],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=PdfPipelineOptions(
+                    do_table_structure=True,
+                    table_structure_options=TableStructureOptions(mode=TableFormerMode.ACCURATE),
+                    accelerator_options=accelerator_options,
                 )
-            },
-        )
-
-
-class DefaultTokenizerFactory:
-    """Default implementation of tokenizer factory."""
-
-    def __init__(self, model_id: str = "jinaai/jina-embeddings-v3") -> None:
-        self.model_id = model_id
-
-    def create_tokenizer(self) -> AutoTokenizer:
-        """Create a tokenizer with the specified model ID."""
-        return AutoTokenizer.from_pretrained(pretrained_model_name_or_path=self.model_id)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            )
+        },
+    )
 
 
 class DoclingLoader(BaseLoader):
@@ -95,9 +62,6 @@ class DoclingLoader(BaseLoader):
         self,
         file_path: str | list[str],
         organization: str,
-        converter_factory: DocumentConverterFactory | None = None,
-        tokenizer_factory: TokenizerFactory | None = None,
-        max_tokens: int = 8192,
         logger: structlog.stdlib.BoundLogger | None = None,
     ) -> None:
         """Initialize the DoclingLoader.
@@ -105,25 +69,23 @@ class DoclingLoader(BaseLoader):
         Args:
             file_path: Path to the file or list of file paths
             organization: Organization name
-            converter_factory: Factory for creating document converters
-            tokenizer_factory: Factory for creating tokenizers
-            max_tokens: Maximum number of tokens for chunking
             logger: Logger instance
         """
         self.logger: structlog.stdlib.BoundLogger = logger or structlog.get_logger()
         self._file_paths: list[str] = file_path if isinstance(file_path, list) else [file_path]
         self._organization: str = organization
+        self._config: AppConfig = ConfigurationManager.get_config()
 
-        # Use provided factories or create default ones
-        converter_factory = converter_factory or DefaultDocumentConverterFactory()
-        tokenizer_factory = tokenizer_factory or DefaultTokenizerFactory()
+        self._converter: DocumentConverter = create_converter(self._config)
+        embedding_model_id: str = get_embedding_client(self._config).model
+        max_tokens: int = self._config.DOCLING.MAX_TOKENS
 
-        self._converter: DocumentConverter = converter_factory.create_converter()
-
-        tokenizer: AutoTokenizer = tokenizer_factory.create_tokenizer()
+        tokenizer = HuggingFaceTokenizer(
+            tokenizer=AutoTokenizer.from_pretrained(pretrained_model_name_or_path=embedding_model_id),
+            max_tokens=max_tokens,
+        )
         self.chunker: HybridChunker = HybridChunker(
             tokenizer=tokenizer,
-            max_tokens=max_tokens,
             merge_peers=True,
         )
 
@@ -230,4 +192,5 @@ class DoclingLoader(BaseLoader):
                 "mimetype": meta["origin"]["mimetype"],
                 "page_number": prov[0]["page_no"] if len(prov) > 0 else None,
             }
-            yield LCDocument(page_content=chunk.text, metadata=meta_data)
+            text = self.chunker.contextualize(chunk=chunk)
+            yield LCDocument(page_content=text, metadata=meta_data)

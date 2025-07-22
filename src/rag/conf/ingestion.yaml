@@ -6,7 +6,7 @@ INGESTION:
   BUCKET_PREFIX: "documents"
   WATCH_ENABLED: true
   BATCH_SIZE: 10
-  SCAN_INTERVAL: 3600
+  SCAN_INTERVAL: 300
   PROCESSED_TAG: "ingestion_processed"
   UNPROCESSABLE_TAG: "unprocessable"
   NOT_SUPPORTED_FILE_TAG: "not_supported_file"

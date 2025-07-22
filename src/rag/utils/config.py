@@ -49,6 +49,7 @@ class RerankerConfig:
 class DoclingConfig:
     NUM_THREADS: int
     USE_GPU: bool
+    MAX_TOKENS: int
 
 
 @dataclass

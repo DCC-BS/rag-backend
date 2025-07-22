@@ -11,40 +11,6 @@ from rag.services.document_ingestion import S3DocumentIngestionService
 from rag.utils.config import ConfigurationManager
 
 
-def setup_logging(use_json: bool = True) -> None:
-    """Configure structured logging for the ingestion service."""
-    if use_json:
-        processors = [
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer(),
-        ]
-    else:
-        processors = [
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.dev.ConsoleRenderer(),
-        ]
-
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        context_class=dict,
-        cache_logger_on_first_use=True,
-    )
-
-
 async def main() -> None:
     """Main entry point for the document ingestion service."""
     parser = argparse.ArgumentParser(
@@ -55,7 +21,7 @@ Examples:
   %(prog)s                           # Run with default settings
   %(prog)s --scan-only               # Run initial scan only (no watch mode)
   %(prog)s --config custom.yaml      # Use custom configuration file
-  %(prog)s --console-logging         # Use console output instead of JSON logging
+  %(prog)s --verbose                 # Use console output instead of JSON logging
 
 The service will:
 1. Perform an initial scan of all configured S3 buckets
@@ -78,12 +44,6 @@ The service will:
     )
 
     parser.add_argument(
-        "--console-logging",
-        action="store_true",
-        help="Use console logging instead of JSON logging",
-    )
-
-    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -91,9 +51,6 @@ The service will:
     )
 
     args = parser.parse_args()
-
-    # Setup logging
-    setup_logging(use_json=not args.console_logging)
 
     if args.verbose:
         import logging
@@ -138,7 +95,7 @@ async def run_service_with_cleanup(service: S3DocumentIngestionService) -> None:
     # Perform initial scan with optional cleanup
     service.initial_scan()
 
-    # Start change monitoring if enabled
+    # Start change monitoring if enaböled
     if service.config.INGESTION.WATCH_ENABLED:
         service.logger.info("Document ingestion service is running. Press Ctrl+C to stop.")
         try:
