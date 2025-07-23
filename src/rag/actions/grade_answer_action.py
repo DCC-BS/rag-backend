@@ -38,7 +38,10 @@ class GradeAnswerAction(ActionProtocol):
         answer_prompt: ChatPromptTemplate = ChatPromptTemplate.from_messages(
             messages=[
                 ("system", system),
-                ("user", "Answer: {answer} \\n User question: {question}"),
+                (
+                    "user",
+                    "Is the answer relevant to the question? Answer: {answer} \\n User question: {question} \nothink",
+                ),
             ]
         )
         answer_grader = answer_prompt | self.structured_llm_grade_answer

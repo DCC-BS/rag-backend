@@ -90,6 +90,7 @@ class AppConfig:
     CORS_ORIGINS: list[str]
     AZURE_CLIENT_ID: str
     AZURE_TENANT_ID: str
+    SCOPE_DESCRIPTION: str
 
 
 class ConfigurationManager:

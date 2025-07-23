@@ -3,6 +3,12 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class ChatMessage(BaseModel):
+    message: str
+    thread_id: str = "default"
+    document_ids: list[int] | None = None
+
+
 class DocumentMetadata(BaseModel):
     """Document metadata response model."""
 

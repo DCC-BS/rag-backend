@@ -50,5 +50,7 @@ class GradeHallucination(BaseModel):
 class GradeAnswer(BaseModel):
     """Binary score for answer generation."""
 
+    reason: str | None = Field(
+        description="Reason for the grade"
+    )  # Important to have reason fist to let the LLM "think" and afterwards generate the score
     binary_score: Literal["yes", "no"] = Field(description="Answer is relevant to the question, 'yes' or 'no'")
-    reason: str | None = Field(description="Reason for the grade")

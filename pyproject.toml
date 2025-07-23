@@ -7,7 +7,6 @@ license = "MIT"
 license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.13,<4.0"
 dependencies = [
-    "authentication-bs-py>=0.1.2",
     "docling>=2.15.0",
     "langchain-openai>=0.2.14",
     "langchain>=0.3.14",
@@ -23,6 +22,7 @@ dependencies = [
     "pgvector>=0.4.1",
     "alembic>=1.16.2",
     "boto3>=1.38.44",
+    "fastapi-azure-auth>=5.1.1",
 ]
 
 [[tool.uv.index]]
@@ -53,9 +53,6 @@ dev = [
     "mkdocstrings[python]>=0.26.1",
     "pytest-asyncio>=0.26.0",
 ]
-
-[tool.uv.sources]
-authentication-bs-py = { git = "https://github.com/DCC-BS/authentication.bs.py", rev = "v0.1.2" }
 
 [build-system]
 requires = ["hatchling","version-pioneer>=0.0.13"]
