@@ -206,9 +206,9 @@ class S3DocumentTagger:
 
     def __init__(self, s3_utils: S3Utils, config: AppConfig | None = None) -> None:
         """Initialize S3 document tagger."""
-        self.s3_utils = s3_utils
-        self.config = config or ConfigurationManager.get_config()
-        self.logger = s3_utils.logger
+        self.s3_utils: S3Utils = s3_utils
+        self.config: AppConfig = config or ConfigurationManager.get_config()
+        self.logger: structlog.stdlib.BoundLogger = s3_utils.logger
 
         # Error tags for document tagging
         self.error_tags: set[str] = {

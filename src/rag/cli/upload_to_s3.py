@@ -111,21 +111,21 @@ def main() -> None:
     upload_all_parser = subparsers.add_parser(
         "upload-all", help="Upload all subdirectories from the data directory to their respective S3 buckets"
     )
-    upload_all_parser.add_argument(
+    _ = upload_all_parser.add_argument(
         "--data-dir",
         type=Path,
         default=Path("data"),
         help="Data directory containing subdirectories for each access role (default: data)",
     )
-    upload_all_parser.add_argument(
+    _ = upload_all_parser.add_argument(
         "--flat", action="store_true", help="Upload files without preserving directory structure (flatten)"
     )
 
     # Command: upload-role (uploads specific access role directory)
     upload_role_parser = subparsers.add_parser("upload-role", help="Upload documents for a specific access role")
-    upload_role_parser.add_argument("source_dir", type=Path, help="Source directory containing documents to upload")
-    upload_role_parser.add_argument("access_role", help="Access role (determines target bucket), e.g., EL, SH, EL2")
-    upload_role_parser.add_argument(
+    _ = upload_role_parser.add_argument("source_dir", type=Path, help="Source directory containing documents to upload")
+    _ = upload_role_parser.add_argument("access_role", help="Access role (determines target bucket), e.g., EL, SH, EL2")
+    _ = upload_role_parser.add_argument(
         "--flat", action="store_true", help="Upload files without preserving directory structure (flatten)"
     )
 
