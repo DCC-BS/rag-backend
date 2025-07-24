@@ -198,7 +198,6 @@ class SHRAGPipeline:
                 for response in self._handle_updates_event(stream_content):
                     yield response
             elif kind == "messages":
-                # print(stream_content)
                 response = self._handle_messages_event(stream_content)
                 if response:
                     yield response

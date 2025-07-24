@@ -126,30 +126,30 @@ wheels = [
 
 [[package]]
 name = "boto3"
-version = "1.39.11"
+version = "1.39.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "botocore" },
     { name = "jmespath" },
     { name = "s3transfer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b6/2e/ed75ea3ee0fd1afacc3379bc2b7457c67a6b0f0e554e1f7ccbdbaed2351b/boto3-1.39.11.tar.gz", hash = "sha256:3027edf20642fe1d5f9dc50a420d0fe2733073ed6a9f0f047b60fe08c3682132", size = 111869, upload-time = "2025-07-22T19:26:50.867Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/f6/9021213a36aefc43dc300c89882a52d348f3a7a344fefda145f1b741d0a5/boto3-1.39.12.tar.gz", hash = "sha256:1a715cb40ea9df6b666148b243b5b9adbfa5be50d28e2f660330c0581d94b639", size = 111834, upload-time = "2025-07-23T19:21:22.639Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/66/88566a6484e746c0b075f7c9bb248e8548eda0a486de4460d150a41e2d57/boto3-1.39.11-py3-none-any.whl", hash = "sha256:af8f1dad35eceff7658fab43b39b0f55892b6e3dd12308733521cc24dd2c9a02", size = 139900, upload-time = "2025-07-22T19:26:48.706Z" },
+    { url = "https://files.pythonhosted.org/packages/78/b6/c717416e67b1bef84be9c05f2686d353544eda2af5b43af06996a43f6481/boto3-1.39.12-py3-none-any.whl", hash = "sha256:bbf7a8d374b513975c305883ae40e623cc261dbdc25ea86ae435647cae837a15", size = 139899, upload-time = "2025-07-23T19:21:19.552Z" },
 ]
 
 [[package]]
 name = "botocore"
-version = "1.39.11"
+version = "1.39.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jmespath" },
     { name = "python-dateutil" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/d0/9d64261186cff650fe63168441edb4f4cd33f085a74c0c54455630a71f91/botocore-1.39.11.tar.gz", hash = "sha256:953b12909d6799350e346ab038e55b6efe622c616f80aef74d7a6683ffdd972c", size = 14217749, upload-time = "2025-07-22T19:26:40.723Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/de/136cb340bc7edc2709e0b4f1b422a101f1756982d774384c5cfb0eb27987/botocore-1.39.12.tar.gz", hash = "sha256:d20b53a196af32ff153cbdbef3cb89e6a9065dc5e90ce23d009e03364601a266", size = 14219106, upload-time = "2025-07-23T19:21:11.155Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/2c/8a0b02d60a1dbbae7faa5af30484b016aa3023f9833dfc0d19b0b770dd6a/botocore-1.39.11-py3-none-any.whl", hash = "sha256:1545352931a8a186f3e977b1e1a4542d7d434796e274c3c62efd0210b5ea76dc", size = 13876276, upload-time = "2025-07-22T19:26:35.164Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/af/3b82594c5fa26464b548da35a6affe27a44993f65c4149ed8cf8a5df8387/botocore-1.39.12-py3-none-any.whl", hash = "sha256:60bfa0f1e0eb03997e22254e2e6a0e3f7e02b8f845253a4bb235d9240d195c72", size = 13876938, upload-time = "2025-07-23T19:21:05.944Z" },
 ]
 
 [[package]]
@@ -436,7 +436,7 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.43.0"
+version = "2.43.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonref" },
@@ -450,9 +450,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/25/ce/bfea0c5027233938cdffdb231d44b51dd863bcd6d1f18662163f469a29fe/docling_core-2.43.0.tar.gz", hash = "sha256:052afd56b2b141470b13fae36eeb1196a448c900e870c67cfb9f0340d9df9366", size = 155300, upload-time = "2025-07-16T07:28:37.736Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/eb/c5af5ab617ca162fac7a1b9b89db6e52c33beb50b083b4eed858cea4f4b3/docling_core-2.43.1.tar.gz", hash = "sha256:8bc76879439e4ef6f65e60621fc70e6c81e02cb7490b08a12e416bfb05593180", size = 155583, upload-time = "2025-07-23T14:18:34.149Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/29/ff8c720089c7cfe051a68e5ce3e8bf700b205316c231c36fc54e1595932c/docling_core-2.43.0-py3-none-any.whl", hash = "sha256:1df0fb1e6261c2b64dda48e39b3af51bcff75e84519ae95df57ab6c51a6952f5", size = 159126, upload-time = "2025-07-16T07:28:36.244Z" },
+    { url = "https://files.pythonhosted.org/packages/de/a1/25eafa2cfd8e73ff15a23e74d3698dac7608e1ca984081728788dd1444df/docling_core-2.43.1-py3-none-any.whl", hash = "sha256:24364a2344b3324a55fb4eba8cf2396345a90ca782766daa78412b6cdef00776", size = 159318, upload-time = "2025-07-23T14:18:32.576Z" },
 ]
 
 [package.optional-dependencies]
@@ -463,7 +463,7 @@ chunking = [
 
 [[package]]
 name = "docling-ibm-models"
-version = "3.8.2"
+version = "3.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "accelerate" },
@@ -481,9 +481,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/84/e4/fff5154ab49aa5c72cc5c3885ef8854148f16e7a03589d6855085e4461fa/docling_ibm_models-3.8.2.tar.gz", hash = "sha256:fe0fc679e797d4d2c69bb62e03d9a3d702d96844a4af7c5d071510fd0451919d", size = 86082, upload-time = "2025-07-18T11:06:04.263Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/4e/8fdc66af4390d4cfa6ecfe27a03bdbacde96f80dda4baff7f01f5dae8b04/docling_ibm_models-3.9.0.tar.gz", hash = "sha256:e3f866371df86a85abc2ae88fa05a9e56e3ae3b5e6512bec9cc5b6e12096af50", size = 86575, upload-time = "2025-07-23T14:18:29.579Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/c3/233a0142a60089768d9711dbd5b295c1722e1bb3ef3840f2edc442e57360/docling_ibm_models-3.8.2-py3-none-any.whl", hash = "sha256:b775c02dac8b8847b655770323a52b364a3be6d76143f3b339e4b52d11459069", size = 86110, upload-time = "2025-07-18T11:06:02.576Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/74/9ff640777c35b7a5347e53d55fe8103ee621bd1c72e820456673f59f1184/docling_ibm_models-3.9.0-py3-none-any.whl", hash = "sha256:cde63a13314c72c969a355cd4dfea8aa253d14ff8fb7fd4bc15d6e2c9d161c4d", size = 86602, upload-time = "2025-07-23T14:18:28.354Z" },
 ]
 
 [[package]]
@@ -1002,7 +1002,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "0.3.71"
+version = "0.3.72"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -1013,9 +1013,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/ea/f7089f7557673b2ac71396ab4bd4322ec959fd7d3901232998ba22c8f953/langchain_core-0.3.71.tar.gz", hash = "sha256:03ce06ba86bd1fa202b7b704d81554306f9cf5a3044b80d9a8ea7d93eab08623", size = 567226, upload-time = "2025-07-22T19:55:59.122Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/49/7568baeb96a57d3218cb5f1f113b142063679088fd3a0d0cae1feb0b3d36/langchain_core-0.3.72.tar.gz", hash = "sha256:4de3828909b3d7910c313242ab07b241294650f5cb6eac17738dd3638b1cd7de", size = 567227, upload-time = "2025-07-24T00:40:08.5Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/1b/e9af4aac9623d63596c499f619082fa48c4b995696b6d2e8e98e53423809/langchain_core-0.3.71-py3-none-any.whl", hash = "sha256:cce6f3faae57d23bc4f2b41246b9dcf06b8dcdf52caaf6afd62b0849df20ba23", size = 442804, upload-time = "2025-07-22T19:55:57.879Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/7d/9f75023c478e3b854d67da31d721e39f0eb30ae969ec6e755430cb1c0fb5/langchain_core-0.3.72-py3-none-any.whl", hash = "sha256:9fa15d390600eb6b6544397a7aa84be9564939b6adf7a2b091179ea30405b240", size = 442806, upload-time = "2025-07-24T00:40:06.994Z" },
 ]
 
 [[package]]
@@ -2960,7 +2960,7 @@ wheels = [
 
 [[package]]
 name = "tox"
-version = "4.28.0"
+version = "4.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -2973,9 +2973,9 @@ dependencies = [
     { name = "pyproject-api" },
     { name = "virtualenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/98/3d/2efc68c86b2879b0abdf0d07839da47026489dca424a11379277a40fc67c/tox-4.28.0.tar.gz", hash = "sha256:442347b1a415733850f097e7e78b8c5f38b5e1719f8b7205aade5d055f08068c", size = 199516, upload-time = "2025-07-20T18:25:51.975Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/a3/6fdc3f17aad7f2971739c6efc537a692d619c54acb224d90e62733346a60/tox-4.28.1.tar.gz", hash = "sha256:227ce1fdfea7763107aed3a8ac87d74b1bd1240ad7dd9c37fc2cb2b318006520", size = 199598, upload-time = "2025-07-23T06:16:39.555Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/df/7f962b921f4efa414ad06f2abc665eff379c62ee46b959779381209e2e72/tox-4.28.0-py3-none-any.whl", hash = "sha256:3e2f5c0a00523a58666690108b66820150f6435cb6e4dd95caf21bb52133c1d1", size = 173883, upload-time = "2025-07-20T18:25:49.934Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/60/0ba9aa30a0a3d0faaebeadd9c847812a929416a4acda50d92c7079a9ec00/tox-4.28.1-py3-none-any.whl", hash = "sha256:d5c84de6efc5d7e8acadb09528943e87ee501a35e064cf852082bc600485c13d", size = 173973, upload-time = "2025-07-23T06:16:37.54Z" },
 ]
 
 [[package]]
