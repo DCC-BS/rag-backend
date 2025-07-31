@@ -11,7 +11,7 @@ from openai import Client
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, selectinload
 
-from rag.connectors.docling_loader import DoclingLoader
+from rag.connectors.docling_loader import DoclingAPILoader
 from rag.models.db_document import Document, DocumentChunk
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
@@ -152,7 +152,7 @@ class S3DocumentIngestionService:
             return False
 
         # Check if file type is supported
-        if not self.file_classifier.is_supported_file_type(object_key, DoclingLoader.SUPPORTED_FORMATS):
+        if not self.file_classifier.is_supported_file_type(object_key, DoclingAPILoader.SUPPORTED_FORMATS):
             self.logger.debug(f"Unsupported file type: {s3_path}")
             # Only tag if not already tagged with an error
             if not self.s3_tagger.has_error_tag(bucket_name, object_key):
@@ -337,7 +337,7 @@ class S3DocumentIngestionService:
 
             try:
                 # Process with docling
-                loader = DoclingLoader(file_path=tmp_file_path, organization=access_role)
+                loader = DoclingAPILoader(file_path=tmp_file_path, organization=access_role)
                 chunks = list(loader.lazy_load())
 
                 if not chunks:

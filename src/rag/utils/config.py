@@ -47,9 +47,9 @@ class RerankerConfig:
 
 @dataclass
 class DoclingConfig:
-    NUM_THREADS: int
-    USE_GPU: bool
+    API_URL: str
     MAX_TOKENS: int
+    PAGE_BREAK_PLACEHOLDER: str
 
 
 @dataclass

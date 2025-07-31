@@ -8,7 +8,7 @@ from langchain_core.documents import Document as LangChainDocument
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
-from rag.connectors.docling_loader import DoclingLoader
+from rag.connectors.docling_loader import DoclingAPILoader
 from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.db_document import Document
 from rag.utils.config import AppConfig, ConfigurationManager
@@ -384,5 +384,5 @@ class DocumentManagementService:
         if self.s3_utils.object_exists(bucket_name, object_key):
             return f"File already exists: {filename}"
         # Check if supported file type
-        if "." + filename.split(".")[-1] not in DoclingLoader.SUPPORTED_FORMATS:
+        if "." + filename.split(".")[-1] not in DoclingAPILoader.SUPPORTED_FORMATS:
             return f"Unsupported file type: {filename.split(".")[-1]}"

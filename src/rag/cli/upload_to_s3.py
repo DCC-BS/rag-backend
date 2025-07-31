@@ -7,7 +7,7 @@ from pathlib import Path
 
 import structlog
 
-from rag.connectors.docling_loader import DoclingLoader
+from rag.connectors.docling_loader import DoclingAPILoader
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.s3 import S3Utils
 
@@ -31,7 +31,7 @@ class S3DocumentUploader:
         # Find all supported files
         supported_files = []
         for file_path in local_dir.rglob("*"):
-            if file_path.is_file() and file_path.suffix.lower() in DoclingLoader.SUPPORTED_FORMATS:
+            if file_path.is_file() and file_path.suffix.lower() in DoclingAPILoader.SUPPORTED_FORMATS:
                 supported_files.append(file_path)
 
         total_files = len(supported_files)

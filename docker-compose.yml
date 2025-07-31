@@ -17,6 +17,7 @@ services:
       - LLM_URL=http://llm:8000/v1
       - RERANKER_URL=http://reranker:8000
       - EMBEDDING_URL=http://embedding:8000/v1
+      - DOCLING_URL=http://docling-serve:5001
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
       - BACKEND_DEV=${BACKEND_DEV}
@@ -50,13 +51,9 @@ services:
     networks:
       - rag-network
 
-  rag-ingestion:
-    build: .
-    container_name: rag-ingestion
-    volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
+  docling-serve:
+    image: quay.io/docling-project/docling-serve-cu124:latest
+    container_name: docling-serve
     deploy:
       resources:
         reservations:
@@ -64,6 +61,32 @@ services:
             - driver: nvidia
               device_ids: [ '0' ]
               capabilities: [gpu]
+    ports:
+      - "8004:5001"
+    environment:
+      - DOCLING_MODELS_PATH=/models
+      - DOCLING_CONFIG_FILE=/app/docling_config.json
+      - DOCLING_SERVE_ENABLE_UI=true
+    volumes:
+      - "${HOME}/.cache/docling:/models"
+      - ./docling_config.json:/app/docling_config.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    networks:
+      - rag-network
+
+  rag-ingestion:
+    build: .
+    container_name: rag-ingestion
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
     environment:
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}
@@ -77,6 +100,7 @@ services:
       - LLM_URL=http://llm:8000/v1
       - RERANKER_URL=http://reranker:8000
       - EMBEDDING_URL=http://embedding:8000/v1
+      - DOCLING_URL=http://docling-serve:5001
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
       - BACKEND_DEV=${BACKEND_DEV}
@@ -93,6 +117,8 @@ services:
         condition: service_started
       rag-backend:
         condition: service_started
+      docling-serve:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - rag-network
