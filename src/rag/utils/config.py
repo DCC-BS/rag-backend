@@ -49,6 +49,7 @@ class RerankerConfig:
 class DoclingConfig:
     API_URL: str
     MAX_TOKENS: int
+    MIN_TOKENS: int
     PAGE_BREAK_PLACEHOLDER: str
 
 

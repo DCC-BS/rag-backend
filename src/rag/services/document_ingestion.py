@@ -114,7 +114,7 @@ class S3DocumentIngestionService:
             file_name=Path(object_key).name,
             document_path=document_path,
             mime_type=chunks[0].metadata.get("mimetype", "unknown"),
-            num_pages=len({chunk.metadata.get("page_number") for chunk in chunks if chunk.metadata.get("page_number")}),
+            num_pages=chunks[0].metadata.get("num_pages"),
             access_roles=[access_role],
         )
         session.add(document)

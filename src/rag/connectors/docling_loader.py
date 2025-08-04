@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, override
 
@@ -10,6 +11,30 @@ from langchain_core.documents import Document as LCDocument
 
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.model_clients import EmbeddingClient, get_embedding_client
+
+
+@dataclass
+class PageContent:
+    """Represents a page with its number and content."""
+
+    page_number: int
+    content: str
+
+
+@dataclass
+class PageChunk:
+    """Represents a chunk of content with its associated page number."""
+
+    page_number: int
+    content: str
+
+
+@dataclass
+class FinalChunk:
+    """Represents a final chunk with page range information and content."""
+
+    page_info: int
+    content: str
 
 
 class DoclingAPILoader(BaseLoader):
@@ -79,6 +104,7 @@ class DoclingAPILoader(BaseLoader):
 
     def _convert_document_via_api(self, source: str) -> str | None:
         """Convert document to markdown using Docling Serve API."""
+        page_break_placeholder = self._config.DOCLING.PAGE_BREAK_PLACEHOLDER
         try:
             with open(source, "rb") as file:
                 file_mime_type = self._get_mimetype(Path(source))
@@ -91,6 +117,7 @@ class DoclingAPILoader(BaseLoader):
                     "force_ocr": False,
                     "table_mode": "accurate",
                     "abort_on_error": False,
+                    "md_page_break_placeholder": page_break_placeholder,
                     "ocr_lang": ["de", "en", "fr"],
                     "pdf_backend": "pypdfium2",
                 }
@@ -175,58 +202,88 @@ class DoclingAPILoader(BaseLoader):
                 "source": source,
                 "mimetype": "pptx",
                 "page_number": page_no,
+                "num_pages": len(pages),
             }
             yield LCDocument(page_content=content, metadata=meta)
 
     def _process_document_pages(self, pages: list[str], path_source: Path, source: str) -> Iterator[LCDocument]:
         """Process document pages with hierarchical header-based chunking."""
-        # Combine all pages into one content with page tracking
-        full_content = ""
-        page_positions: list[tuple[int, int, int]] = []
-
+        # Filter out empty pages and track their numbers
+        non_empty_pages: list[PageContent] = []
         for page_no, page_content in enumerate(pages, 1):
             if page_content.strip():
-                start_pos = len(full_content)
-                full_content += page_content
-                end_pos = len(full_content)
-                page_positions.append((page_no, start_pos, end_pos))
+                non_empty_pages.append(PageContent(page_number=page_no, content=page_content))
 
-        if not full_content.strip():
+        if not non_empty_pages:
             return
 
-        # Chunk the content hierarchically
-        chunks = self._chunk_content_hierarchically(full_content.strip())
+        # Process pages individually or combine adjacent pages if needed
+        yield from self._chunk_pages_with_tracking(non_empty_pages, path_source, source, len(pages))
 
-        # Yield chunks with proper page numbers
-        for chunk_content in chunks:
-            if not chunk_content.strip():
-                continue
-            chunk_tokens: int = self._get_token_count(chunk_content)
+    def _chunk_pages_with_tracking(
+        self, pages: list[PageContent], path_source: Path, source: str, total_pages: int
+    ) -> Iterator[LCDocument]:
+        """Chunk pages while tracking page numbers directly."""
+        # First pass: chunk each page individually and collect with page numbers
+        page_chunks: list[PageChunk] = []
+
+        for page in pages:
+            chunks = self._chunk_content_hierarchically(page.content.strip())
+            for chunk in chunks:
+                if chunk.strip():
+                    page_chunks.append(PageChunk(page_number=page.page_number, content=chunk.strip()))
+
+        # Second pass: combine small adjacent chunks if possible (within 2-page limit)
+        final_chunks: list[FinalChunk] = []
+
+        i = 0
+        while i < len(page_chunks):
+            current_chunk = page_chunks[i]
+            current_tokens = self._get_token_count(current_chunk.content)
+
+            has_next_chunk = i + 1 < len(page_chunks)
+
+            # If chunk is too small, try to combine with next chunk
+            if current_tokens < self._config.DOCLING.MIN_TOKENS and has_next_chunk:
+                next_chunk = page_chunks[i + 1]
+                combined_content = current_chunk.content + "\n\n" + next_chunk.content
+                combined_tokens = self._get_token_count(combined_content)
+
+                # Check if we can combine (within token limit and max 2 pages)
+                page_difference = abs(next_chunk.page_number - current_chunk.page_number)
+                if combined_tokens <= self._config.DOCLING.MAX_TOKENS and page_difference <= 1:
+                    # Determine page info
+                    page_info = current_chunk.page_number
+
+                    final_chunks.append(FinalChunk(page_info=page_info, content=combined_content))
+                    i += 2  # Skip next chunk since we combined it
+                else:
+                    final_chunks.append(FinalChunk(page_info=current_chunk.page_number, content=current_chunk.content))
+                    i += 1
+            else:
+                final_chunks.append(FinalChunk(page_info=current_chunk.page_number, content=current_chunk.content))
+                i += 1
+
+        # Yield final chunks as documents
+        for final_chunk in final_chunks:
+            chunk_tokens = self._get_token_count(final_chunk.content)
+
+            # Validate chunk size
             if chunk_tokens > self._config.DOCLING.MAX_TOKENS:
                 raise ValueError(
                     f"Chunk has {chunk_tokens} tokens, which is greater than max_tokens {self._config.DOCLING.MAX_TOKENS}"
                 )
-
-            # Find which page this chunk starts on
-            chunk_start_pos = full_content.find(chunk_content.strip())
-            page_number = self._find_page_number(chunk_start_pos, page_positions)
 
             meta: dict[str, Any] = {
                 "organization": self._organization,
                 "filename": path_source.name,
                 "source": source,
                 "mimetype": self._get_mimetype(path_source),
-                "page_number": page_number,
+                "page_number": final_chunk.page_info,
+                "num_pages": total_pages,
             }
-            yield LCDocument(page_content=chunk_content.strip(), metadata=meta)
 
-    def _find_page_number(self, position: int, page_positions: list[tuple[int, int, int]]) -> int:
-        """Find which page a given position belongs to."""
-        for page_no, start_pos, end_pos in page_positions:
-            if start_pos <= position < end_pos:
-                return page_no
-        # Default to first page if not found
-        return 1
+            yield LCDocument(page_content=final_chunk.content, metadata=meta)
 
     def _chunk_content_hierarchically(self, content: str) -> list[str]:
         """Chunk content hierarchically by markdown headers using pattern matching."""
@@ -256,7 +313,8 @@ class DoclingAPILoader(BaseLoader):
                 result_chunks.extend(self._split_content_by_headers(chunk, max_tokens, header_level + 1))
 
         # Combine consecutive small chunks
-        return self._combine_small_chunks(result_chunks, max_tokens)
+        min_tokens = self._config.DOCLING.MIN_TOKENS
+        return self._combine_small_chunks(result_chunks, max_tokens, min_tokens)
 
     def _split_by_header_pattern(self, content: str, level: int) -> list[str]:
         """Split content by markdown headers of specified level."""
@@ -315,7 +373,7 @@ class DoclingAPILoader(BaseLoader):
 
         return chunks
 
-    def _combine_small_chunks(self, chunks: list[str], max_tokens: int) -> list[str]:
+    def _combine_small_chunks(self, chunks: list[str], max_tokens: int, min_tokens: int) -> list[str]:
         """Combine consecutive small chunks that fit within max_tokens."""
         if not chunks:
             return chunks
@@ -330,7 +388,7 @@ class DoclingAPILoader(BaseLoader):
             if chunk_tokens > max_tokens:
                 raise ValueError(f"Chunk has {chunk_tokens} tokens, which is greater than max_tokens {max_tokens}")
 
-            if current_tokens + chunk_tokens < max_tokens:
+            if current_tokens < min_tokens and current_tokens + chunk_tokens < max_tokens:
                 current_combined += "\n\n" + chunk
                 current_tokens += chunk_tokens
             else:
