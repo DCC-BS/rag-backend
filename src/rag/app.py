@@ -6,6 +6,7 @@ from typing import Annotated, Any
 import structlog
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from fastapi_azure_auth import SingleTenantAzureAuthorizationCodeBearer
@@ -20,6 +21,7 @@ from rag.models.api_models import (
 from rag.services.document_management import DocumentManagementService
 from rag.services.rag_pipeline import SHRAGPipeline
 from rag.utils.config import ConfigurationManager
+from rag.utils.usage_tracking import get_pseudonymized_user_id
 
 structlog.configure(
     processors=[
@@ -87,6 +89,19 @@ def get_app() -> FastAPI:
 app = get_app()
 
 
+async def validate_is_writer_user(user: Annotated[User, Depends(azure_scheme)]) -> User:
+    """
+    Validate that a user is in the `Writer` role in order to access the API.
+    Raises a 401 authentication error if not.
+    """
+    if "Writer" not in user.roles:
+        raise HTTPException(status_code=401, detail="User is has no `Writer` role")
+    return user
+
+
+Writer = Annotated[User, Depends(validate_is_writer_user)]
+
+
 @app.get("/users/me", response_model=User)
 async def read_users_me(current_user: Annotated[User, Depends(azure_scheme)]):
     return current_user
@@ -98,8 +113,10 @@ async def chat(
     current_user: Annotated[User, Depends(azure_scheme)],
     pipeline: Annotated[SHRAGPipeline, Depends(get_pipeline)],
 ) -> StreamingResponse:
+    pseudonym_id = get_pseudonymized_user_id(current_user, config.HMAC_SECRET)
+    logger.info("app_event", extra={"pseudonym_id": pseudonym_id, "event": "chat_message"})
+
     async def event_generator() -> AsyncGenerator[str, Any]:
-        print(current_user)
         try:
             async for event in pipeline.astream_query(
                 message=chat_message.message,
@@ -135,11 +152,12 @@ async def search_documents(
     query: str | None = None,
     limit: int = 5,
 ) -> DocumentListResponse:
-    print(current_user)
     """Search documents by query or get all documents accessible by the current user."""
     if query is None:
         documents_data = document_service.get_user_documents(current_user.roles)
     else:
+        pseudonym_id = get_pseudonymized_user_id(current_user, config.HMAC_SECRET)
+        logger.info("app_event", extra={"pseudonym_id": pseudonym_id, "event": "search_documents"})
         documents_data = document_service.search_documents(query, current_user.roles, limit)
 
     documents = [DocumentMetadata(**doc) for doc in documents_data]
@@ -167,10 +185,13 @@ async def get_document_by_id(
 async def upload_document(
     access_role: Annotated[str, Form()],
     files: Annotated[list[UploadFile], File()],
-    current_user: Annotated[User, Depends(azure_scheme)],
+    current_user: Writer,
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
 ) -> DocumentOperationResponse:
     """Upload a new document to S3."""
+    pseudonym_id = get_pseudonymized_user_id(current_user, config.HMAC_SECRET)
+    logger.info("app_event", extra={"pseudonym_id": pseudonym_id, "event": "upload_document"})
+
     results: dict[str, list[str]] = {"failed": [], "success": []}
     # Only raise an exception if we are handling single file upload
     raise_exception: bool = len(files) == 1
@@ -200,10 +221,13 @@ async def update_document(
     document_id: int,
     access_role: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
-    current_user: Annotated[User, Depends(azure_scheme)],
+    current_user: Writer,
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
 ) -> DocumentOperationResponse:
     """Update an existing document in S3."""
+    pseudonym_id = get_pseudonymized_user_id(current_user, config.HMAC_SECRET)
+    logger.info("app_event", extra={"pseudonym_id": pseudonym_id, "event": "update_document"})
+
     result = document_service.update_document(document_id, file, access_role, current_user.roles)
 
     return DocumentOperationResponse(
@@ -217,10 +241,13 @@ async def update_document(
 @app.delete("/documents/{document_id}", response_model=DocumentOperationResponse)
 async def delete_document(
     document_id: int,
-    current_user: Annotated[User, Depends(azure_scheme)],
+    current_user: Writer,
     document_service: Annotated[DocumentManagementService, Depends(get_document_service)],
 ) -> DocumentOperationResponse:
     """Delete a document from S3 and database."""
+    pseudonym_id = get_pseudonymized_user_id(current_user, config.HMAC_SECRET)
+    logger.info("app_event", extra={"pseudonym_id": pseudonym_id, "event": "delete_document"})
+
     result = document_service.delete_document(document_id, current_user.roles)
 
     return DocumentOperationResponse(

@@ -92,6 +92,7 @@ class AppConfig:
     AZURE_CLIENT_ID: str
     AZURE_TENANT_ID: str
     SCOPE_DESCRIPTION: str
+    HMAC_SECRET: str
 
 
 class ConfigurationManager:
