@@ -18,4 +18,4 @@ RUN uv sync --frozen
 COPY ./entrypoint.sh /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-CMD ["uv", "run", "fastapi", "src/rag/app.py", "--port", "${BACKEND_PORT}", "--host", "${BACKEND_HOST}"]
+CMD ["uv", "run", "fastapi", "run", "src.rag.app:app", "--port", "${BACKEND_PORT}", "--host", "${BACKEND_HOST}"]

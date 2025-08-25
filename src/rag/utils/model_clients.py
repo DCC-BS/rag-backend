@@ -4,12 +4,12 @@ import os
 from typing import NamedTuple
 
 import cohere
-import structlog
 from langchain_openai import ChatOpenAI
 from openai import Client
 from pydantic import SecretStr
 
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.logger import get_logger
 
 
 class EmbeddingClient(NamedTuple):
@@ -46,7 +46,7 @@ def get_embedding_client(config: AppConfig | None = None) -> EmbeddingClient:
         Exception: If client creation fails
     """
     config = config or ConfigurationManager.get_config()
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     client = Client(base_url=config.EMBEDDINGS.API_URL, api_key=os.getenv("OPENAI_API_KEY", "none"))
 
@@ -74,7 +74,7 @@ def get_reranker_client(config: AppConfig | None = None) -> RerankerClient:
         Exception: If client creation fails
     """
     config = config or ConfigurationManager.get_config()
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     client = cohere.ClientV2(base_url=config.RERANKER.API_URL, api_key=os.getenv("OPENAI_API_KEY", "none"))
 
@@ -103,7 +103,7 @@ def get_llm_client(config: AppConfig | None = None) -> LLMClient:
         Exception: If client creation fails
     """
     config = config or ConfigurationManager.get_config()
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     # Create OpenAI-compatible client first to get available models
     temp_client = Client(base_url=config.LLM.API_URL, api_key=os.getenv("OPENAI_API_KEY", "none"))

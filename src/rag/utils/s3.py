@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
-import structlog
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.logger import get_logger
 
 
 class S3Utils:
@@ -17,7 +17,7 @@ class S3Utils:
     def __init__(self, config: AppConfig | None = None) -> None:
         """Initialize S3 utilities with configuration."""
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
         self.s3_client = self._setup_client()
 
     def _setup_client(self):
@@ -208,7 +208,7 @@ class S3DocumentTagger:
         """Initialize S3 document tagger."""
         self.s3_utils: S3Utils = s3_utils
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger: structlog.stdlib.BoundLogger = s3_utils.logger
+        self.logger = get_logger()
 
         # Error tags for document tagging
         self.error_tags: set[str] = {

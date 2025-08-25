@@ -2,7 +2,6 @@ from collections.abc import Sequence
 from typing import Any, override
 
 import cohere
-import structlog
 from cohere.v2.types.v2rerank_response import V2RerankResponse
 from langchain.schema import (
     BaseRetriever,
@@ -18,6 +17,7 @@ from sqlalchemy.sql.elements import TextClause
 
 from rag.models.db_document import DocumentChunk
 from rag.utils.db import get_db_url
+from rag.utils.logger import get_logger
 from rag.utils.model_clients import get_embedding_client, get_reranker_client
 
 
@@ -99,7 +99,7 @@ class PGRoleRetriever(BaseRetriever):
 
         db_url: str = get_db_url()
         self._engine: Engine = create_engine(url=db_url)
-        self._logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self._logger = get_logger()
         self._bm25_limit: int = bm25_limit
         self._vector_limit: int = vector_limit
         self._top_k: int = top_k

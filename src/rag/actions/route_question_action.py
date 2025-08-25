@@ -1,6 +1,5 @@
 from typing import Any, Literal, override
 
-import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -11,6 +10,7 @@ from pydantic import BaseModel, Field
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
 from rag.models.stream_response import Sender, StreamResponse
+from rag.utils.logger import get_logger
 
 
 class RouteDecision(BaseModel):
@@ -27,7 +27,7 @@ class RouteQuestionAction(ActionProtocol):
     """
 
     def __init__(self, llm: ChatOpenAI) -> None:
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
         self.llm = llm
         self.structured_llm_router = self.llm.with_structured_output(schema=RouteDecision, method="json_schema")
 

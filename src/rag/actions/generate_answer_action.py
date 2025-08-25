@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Any, override
 
-import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import BaseMessage
 from langchain_core.messages import SystemMessage
@@ -13,6 +12,7 @@ from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
 from rag.models.stream_response import Sender, StreamResponse
 from rag.tools.calculator import add, divide, multiply, square, subtract
+from rag.utils.logger import get_logger
 
 
 class GenerateAnswerAction(ActionProtocol):
@@ -41,7 +41,7 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
 1. ** Rich in Vitamins and Minerals: **\n * Fruits are packed with vitamins like Vitamin C (important for immunity and skin health), Vitamin A (for vision and immune function), and B vitamins (for energy and metabolism). \n * They also provide crucial minerals such as potassium (for healthy blood pressure and muscle function), magnesium, and folate. [2,3]"""
 
     def __init__(self, llm: ChatOpenAI) -> None:
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
         self.llm = llm.bind_tools([multiply, add, subtract, divide, square])
 
     @override

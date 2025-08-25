@@ -1,6 +1,5 @@
 from typing import Any, Literal, override
 
-import structlog
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -10,6 +9,7 @@ from langgraph.types import Command
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import GradeHallucination, RAGState
 from rag.models.stream_response import Sender, StreamResponse
+from rag.utils.logger import get_logger
 
 
 class GradeHallucinationAction(ActionProtocol):
@@ -18,7 +18,7 @@ class GradeHallucinationAction(ActionProtocol):
     """
 
     def __init__(self, llm: ChatOpenAI) -> None:
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
         self.llm: ChatOpenAI = llm
         self.structured_llm_grade_hallucination = self.llm.with_structured_output(
             GradeHallucination, method="json_schema"

@@ -5,11 +5,12 @@ from pathlib import Path
 from typing import Any, ClassVar, override
 
 import httpx
-import structlog
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document as LCDocument
+from structlog.stdlib import BoundLogger
 
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.logger import get_logger
 from rag.utils.model_clients import EmbeddingClient, get_embedding_client
 
 
@@ -46,7 +47,7 @@ class DoclingAPILoader(BaseLoader):
         self,
         file_path: str | list[str],
         organization: str,
-        logger: structlog.stdlib.BoundLogger | None = None,
+        logger: BoundLogger | None = None,
     ) -> None:
         """Initialize the DoclingAPILoader.
 
@@ -55,7 +56,7 @@ class DoclingAPILoader(BaseLoader):
             organization: Organization name
             logger: Logger instance
         """
-        self.logger: structlog.stdlib.BoundLogger = logger or structlog.get_logger()
+        self.logger = logger or get_logger()
         self._file_paths: list[str] = file_path if isinstance(file_path, list) else [file_path]
         self._organization: str = organization
         self._config: AppConfig = ConfigurationManager.get_config()

@@ -1,12 +1,12 @@
 from typing import Any, Protocol, override
 
-import structlog
 from langchain.schema import Document
 from langchain_core.runnables import RunnableConfig
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
 from rag.models.stream_response import Sender, StreamResponse
+from rag.utils.logger import get_logger
 
 
 class RetrieverProtocol(Protocol):
@@ -21,7 +21,7 @@ class RetrieveAction(ActionProtocol):
     """
 
     def __init__(self, retriever: RetrieverProtocol) -> None:
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
         self.retriever = retriever
 
     @override

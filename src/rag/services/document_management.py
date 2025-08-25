@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
 
-import structlog
 from fastapi import HTTPException, UploadFile, status
 from langchain_core.documents import Document as LangChainDocument
 from sqlalchemy import Engine, create_engine, select
@@ -13,6 +12,7 @@ from rag.connectors.pg_retriever import PGRoleRetriever
 from rag.models.db_document import Document
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.db import get_db_url
+from rag.utils.logger import get_logger
 from rag.utils.s3 import S3Utils
 
 
@@ -26,7 +26,7 @@ class DocumentManagementService:
             config: Application configuration object
         """
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
 
         db_url: str = get_db_url()
         self.engine: Engine = create_engine(url=db_url)

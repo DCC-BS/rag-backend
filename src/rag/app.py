@@ -3,7 +3,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-import structlog
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import HTTPException
@@ -21,18 +20,11 @@ from rag.models.api_models import (
 from rag.services.document_management import DocumentManagementService
 from rag.services.rag_pipeline import SHRAGPipeline
 from rag.utils.config import ConfigurationManager
+from rag.utils.logger import get_logger, init_logger
 from rag.utils.usage_tracking import get_pseudonymized_user_id
 
-structlog.configure(
-    processors=[
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.dev.set_exc_info,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(exception_formatter=structlog.dev.plain_traceback),
-    ]
-)
-logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+init_logger()
+logger = get_logger()
 
 
 CONST_SPLIT_STRING = "\0"
