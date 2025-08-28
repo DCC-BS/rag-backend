@@ -20,4 +20,4 @@ RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-CMD uv run fastapi run src.rag.app:app --port ${BACKEND_PORT} --host ${BACKEND_HOST}
+CMD uv run uvicorn src.rag.app:app --port ${BACKEND_PORT} --host ${BACKEND_HOST}
