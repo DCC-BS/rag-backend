@@ -146,7 +146,7 @@ services:
       - rag-network
 
   llm:
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.10.2
     container_name: vllm-qwen3-32b
     deploy:
       resources:
@@ -196,7 +196,7 @@ services:
       - rag-network
 
   reranker:
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.10.2
     container_name: vllm-reranker
     deploy:
       resources:
@@ -232,7 +232,7 @@ services:
       - rag-network
 
   embedding:
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.10.2
     container_name: vllm-embedding
     deploy:
       resources:
