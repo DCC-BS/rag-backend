@@ -29,7 +29,7 @@ class GradeHallucinationAction(ActionProtocol):
         """
         Grade hallucination on retrieved documents and answer.
         """
-        self.logger.info("---GRADE HALLUCINATION---")
+        self.logger.debug("---GRADE HALLUCINATION---")
         system = """You are a hallucination checker. You are given a list of retrieved documents and an answer.
         You are to grade the answer based on the retrieved documents.
         If the answer is "Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.", return 'no'.
@@ -54,12 +54,12 @@ class GradeHallucinationAction(ActionProtocol):
             config,
         )  # pyright: ignore[reportAssignmentType]
         if hallucination_result.binary_score == "yes":
-            self.logger.info("---HALLUCINATION DETECTED---")
+            self.logger.debug("---HALLUCINATION DETECTED---")
             return Command(
                 update={"hallucination_score": True},
             )
         else:
-            self.logger.info("---HALLUCINATION NOT DETECTED---")
+            self.logger.debug("---HALLUCINATION NOT DETECTED---")
             return Command(
                 update={"hallucination_score": False},
             )

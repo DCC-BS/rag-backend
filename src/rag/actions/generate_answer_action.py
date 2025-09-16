@@ -56,7 +56,7 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
         Returns:
             dict: The answer and updated messages
         """
-        self.logger.info("---GENERATE ANSWER---")
+        self.logger.debug("---GENERATE ANSWER---")
         if not state.messages:
             state.messages = [SystemMessage(content=self.system_prompt)]
 

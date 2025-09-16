@@ -43,11 +43,11 @@ class RouteQuestionAction(ActionProtocol):
             Command: Command object with routing decision
         """
 
-        self.logger.info("---ROUTE QUESTION---")
+        self.logger.debug("---ROUTE QUESTION---")
         writer = get_stream_writer()
         writer("chat.status.routingQuestion")
         if "context" not in state or state.context is None:
-            self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
+            self.logger.debug("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},
                 goto="retrieve",
@@ -76,13 +76,13 @@ class RouteQuestionAction(ActionProtocol):
         routing_result: RouteDecision = question_router.invoke({"question": state.input}, config)  # pyright: ignore[reportAssignmentType]
 
         if routing_result.next_step == "answer":
-            self.logger.info("---ROUTE QUESTION TO ANSWER GENERATION---")
+            self.logger.debug("---ROUTE QUESTION TO ANSWER GENERATION---")
             return Command(
                 update={"route_query": "answer"},
                 goto="generate_answer",
             )
         elif routing_result.next_step == "retrieval":
-            self.logger.info("---ROUTE QUESTION TO RETRIEVAL---")
+            self.logger.debug("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},
                 goto="retrieve",

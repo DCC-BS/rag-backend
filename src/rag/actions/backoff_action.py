@@ -28,15 +28,15 @@ class BackoffAction(ActionProtocol):
             dict: The updated graph state with the error message
         """
 
-        self.logger.info("---BACKOFF ACTION---")
+        self.logger.debug("---BACKOFF ACTION---")
         return {"answer": "Es konnten keine relevanten Dokumente gefunden werden."}
 
     @override
-    def update_handler(self, data: dict[str, Any]) -> StreamResponse:
+    def update_handler(self, data: dict[str, Any] | None) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
         """
         return StreamResponse.create_answer_response(
             sender=Sender.BACKOFF,
-            answer_text=data.get("answer", ""),
+            answer_text=data.get("answer", "") if data else "",
         )

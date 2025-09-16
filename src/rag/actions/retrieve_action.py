@@ -26,7 +26,7 @@ class RetrieveAction(ActionProtocol):
 
     @override
     def __call__(self, state: RAGState, config: RunnableConfig) -> dict[str, list[Document]]:
-        self.logger.info("---RETRIEVE DOCUMENTS---")
+        self.logger.debug("---RETRIEVE DOCUMENTS---")
         docs: list[Document] = self.retriever.invoke(
             input=state.input,
             user_roles=state.user_organizations,
@@ -37,8 +37,10 @@ class RetrieveAction(ActionProtocol):
         return {"context": docs}
 
     @override
-    def update_handler(self, data: dict[str, Any]) -> StreamResponse:
+    def update_handler(self, data: dict[str, Any] | None) -> StreamResponse:
         """
         Handles updates from the action and returns a StreamResponse.
         """
+        if data is None or data.get("context") is None:
+            return StreamResponse.create_document_response(sender=Sender.RETRIEVE_ACTION, docs=[])
         return StreamResponse.create_document_response(sender=Sender.RETRIEVE_ACTION, docs=data.get("context", []))

@@ -27,7 +27,7 @@ class GradeAnswerAction(ActionProtocol):
         """
         Grade answer generation.
         """
-        self.logger.info("---GRADE ANSWER---")
+        self.logger.debug("---GRADE ANSWER---")
         system = """You are a grader assessing relevance of an answer to a user question. \n
             If the answer is relevant to the question, grade it as relevant. \n
             It does not need to be a stringent test. The goal is to filter out erroneous answers. \n
@@ -51,13 +51,13 @@ class GradeAnswerAction(ActionProtocol):
             {"answer": state.messages[-1].content, "question": state.input}, config
         )  # pyright: ignore[reportAssignmentType]
         if answer_result.binary_score == "yes":
-            self.logger.info("---ANSWER IS RELEVANT---")
+            self.logger.debug("---ANSWER IS RELEVANT---")
 
             return Command(
                 update={"answer_score": "yes"},
             )
         else:
-            self.logger.info("---ANSWER IS NOT RELEVANT---")
+            self.logger.debug("---ANSWER IS NOT RELEVANT---")
             return Command(
                 update={
                     "answer_score": "no",

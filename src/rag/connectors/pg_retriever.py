@@ -223,7 +223,7 @@ class PGRoleRetriever(BaseRetriever):
         chunk_ids = self._execute_hybrid_search(query, query_embedding, user_roles, document_ids)
 
         if not chunk_ids:
-            self._logger.warning("No results found for query", query=query)
+            self._logger.warning("No results found.")
             return []
 
         ordered_chunks = self._fetch_document_chunks(chunk_ids)
