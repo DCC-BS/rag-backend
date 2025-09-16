@@ -22,7 +22,7 @@ class GenerateAnswerAction(ActionProtocol):
 
     today_date: str = datetime.now().strftime("%Y-%m-%d")
 
-    system_prompt: str = """You are an subject matter expert at social welfare regulations for the government in Basel, Switzerland.
+    system_prompt: str = """You are an expert for the government in Basel, Switzerland.
 You are given a question and a context of documents that are relevant to the question.
 You are to answer the question based on the context and the conversation history.
 If you don't know the answer, say 'Entschuldigung, ich kann die Antwort nicht in den Dokumenten finden.'

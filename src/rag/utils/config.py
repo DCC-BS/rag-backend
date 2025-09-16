@@ -6,12 +6,6 @@ from omegaconf import OmegaConf
 
 
 @dataclass
-class ChatConfig:
-    EXAMPLE_QUERIES: list[str]
-    DEFAULT_PROMPT: str
-
-
-@dataclass
 class DocStoreConfig:
     TYPE: str
     PATH: str
@@ -86,7 +80,6 @@ class AppConfig:
     RERANKER: RerankerConfig
     DOCLING: DoclingConfig
     INGESTION: IngestionConfig
-    CHAT: ChatConfig
     ROLES: list[str]
     CORS_ORIGINS: list[str]
     AZURE_CLIENT_ID: str
