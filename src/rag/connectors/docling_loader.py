@@ -1,3 +1,4 @@
+import os
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -161,6 +162,7 @@ class DoclingAPILoader(BaseLoader):
                 response = client.post(
                     f"{embedding_base_url}/tokenize",
                     json={"prompt": text, "model": model},
+                    headers={"Authorization": f"Bearer {os.getenv("OPENAI_API_KEY", "none")}"},
                 )
 
                 if response.status_code == 200:
