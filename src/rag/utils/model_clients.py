@@ -119,7 +119,7 @@ def get_llm_client(config: AppConfig | None = None) -> LLMClient:
     # Create the actual LangChain ChatOpenAI client
     llm_client = ChatOpenAI(
         model=model,
-        api_key=SecretStr("none"),
+        api_key=SecretStr(os.getenv("OPENAI_API_KEY", "none")),
         base_url=config.LLM.API_URL,
     )
 
