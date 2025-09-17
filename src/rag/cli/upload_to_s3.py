@@ -5,10 +5,9 @@ import argparse
 import sys
 from pathlib import Path
 
-import structlog
-
 from rag.connectors.docling_loader import DoclingAPILoader
 from rag.utils.config import AppConfig, ConfigurationManager
+from rag.utils.logger import get_logger
 from rag.utils.s3 import S3Utils
 
 
@@ -18,7 +17,7 @@ class S3DocumentUploader:
     def __init__(self, config: AppConfig | None = None) -> None:
         """Initialize the S3 document uploader."""
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger: structlog.stdlib.BoundLogger = structlog.get_logger()
+        self.logger = get_logger()
 
         # S3 utilities setup
         self.s3_utils = S3Utils(config)
@@ -86,24 +85,6 @@ class S3DocumentUploader:
 
 def main() -> None:
     """Main entry point for the S3 upload utility."""
-    # Configure structured logging
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        context_class=dict,
-        cache_logger_on_first_use=True,
-    )
-
     parser = argparse.ArgumentParser(description="Upload documents to S3 buckets for ingestion")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -135,7 +116,7 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     try:
         uploader = S3DocumentUploader()

@@ -5,10 +5,9 @@ import argparse
 import asyncio
 import sys
 
-import structlog
-
 from rag.services.document_ingestion import S3DocumentIngestionService
 from rag.utils.config import ConfigurationManager
+from rag.utils.logger import get_logger
 
 
 async def main() -> None:
@@ -57,7 +56,7 @@ The service will:
 
         logging.getLogger().setLevel(logging.DEBUG)
 
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     try:
         # Load configuration

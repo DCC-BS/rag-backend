@@ -9,36 +9,14 @@ have been deleted are removed from the database.
 import argparse
 import sys
 
-import structlog
-
 from rag.services.document_ingestion import S3DocumentIngestionService
 from rag.utils.config import ConfigurationManager
-
-
-def setup_logging() -> None:
-    """Configure structured logging for the cleanup script."""
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        context_class=dict,
-        cache_logger_on_first_use=True,
-    )
+from rag.utils.logger import get_logger
 
 
 def main() -> None:
     """Main entry point for the orphaned document cleanup utility."""
-    setup_logging()
-    logger = structlog.get_logger()
+    logger = get_logger()
 
     parser = argparse.ArgumentParser(
         description="Clean up orphaned documents from the database",
@@ -150,7 +128,7 @@ def run_dry_run_cleanup(ingestion_service: S3DocumentIngestionService) -> dict[s
 
     from rag.models.db_document import Document
 
-    logger = structlog.get_logger()
+    logger = get_logger()
     logger.info("Starting dry-run cleanup of orphaned documents")
 
     cleanup_stats = {
