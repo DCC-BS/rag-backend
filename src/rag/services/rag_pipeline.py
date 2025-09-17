@@ -74,8 +74,6 @@ class SHRAGPipeline:
 
         # Add conditional edge based on skip_retrieval
         _ = workflow.add_edge(start_key=START, end_key="route_question")
-        # _ = workflow.add_edge(start_key="retrieve", end_key="generate_answer")
-        # _ = workflow.add_edge(start_key="generate_answer", end_key=END)
         _ = workflow.add_edge(start_key="generate_answer", end_key="grade_answer")
         _ = workflow.add_edge(start_key="grade_answer", end_key=END)
         _ = workflow.add_edge(start_key="backoff", end_key=END)
