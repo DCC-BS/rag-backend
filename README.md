@@ -1,15 +1,15 @@
 # SH RAG Chat
 
-[![Release](https://img.shields.io/github/v/release/DCC-BS/rag-application)](https://img.shields.io/github/v/release/DCC-BS/rag-application)
-[![Build status](https://img.shields.io/github/actions/workflow/status/DCC-BS/rag-application/main.yml?branch=main)](https://github.com/DCC-BS/rag-application/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/DCC-BS/rag-application/branch/main/graph/badge.svg)](https://codecov.io/gh/DCC-BS/rag-application)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/DCC-BS/rag-application)](https://img.shields.io/github/commit-activity/m/DCC-BS/rag-application)
-[![License](https://img.shields.io/github/license/DCC-BS/rag-application)](https://img.shields.io/github/license/DCC-BS/rag-application)
+[![Release](https://img.shields.io/github/v/release/DCC-BS/rag-backend)](https://img.shields.io/github/v/release/DCC-BS/rag-backend)
+[![Build status](https://img.shields.io/github/actions/workflow/status/DCC-BS/rag-backend/main.yml?branch=main)](https://github.com/DCC-BS/rag-backend/actions/workflows/main.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/DCC-BS/rag-backend/branch/main/graph/badge.svg)](https://codecov.io/gh/DCC-BS/rag-backend)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/DCC-BS/rag-backend)](https://img.shields.io/github/commit-activity/m/DCC-BS/rag-backend)
+[![License](https://img.shields.io/github/license/DCC-BS/rag-backend)](https://img.shields.io/github/license/DCC-BS/rag-backend)
 
 This is a template repository for Python projects that use uv for their dependency management.
 
-- **Github repository**: <https://github.com/DCC-BS/rag-application/>
-- **Documentation** <https://DCC-BS.github.io/rag-application/>
+- **Github repository**: <https://github.com/DCC-BS/rag-backend/>
+- **Documentation** <https://DCC-BS.github.io/rag-backend/>
 
 ## Component Descriptions
 * **FastAPI Application**: The main backend service that exposes the RAG API. It handles user authentication, manages the search-and-generation workflow, and serves the final answer to the user.
@@ -108,7 +108,7 @@ First, create a repository on GitHub with the same name as this project, and the
 git init -b main
 git add .
 git commit -m "init commit"
-git remote add origin git@github.com:DCC-BS/rag-application.git
+git remote add origin git@github.com:DCC-BS/rag-backend.git
 git push -u origin main
 ```
 
