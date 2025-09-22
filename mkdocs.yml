@@ -9,7 +9,9 @@ copyright: Maintained by <a href="https://dcc-bs.ch">Data Competence Center Base
 
 nav:
   - Home: index.md
-  - Modules: modules.md
+  - Document API: document_api.md
+  - Document Ingestion: ingestion.md
+  - Orphaned Documents: orphaned_document_cleanup.md
 plugins:
   - search
   - mkdocstrings:
