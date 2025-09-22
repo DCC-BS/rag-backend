@@ -1,10 +1,10 @@
 site_name: RAG Bot für den Kanton Basel Stadt
-repo_url: https://github.com/DCC-BS/rag-application
-site_url: https://dcc-bs.github.io/rag-application
+repo_url: https://github.com/DCC-BS/rag-backend
+site_url: https://dcc-bs.github.io/rag-backend
 site_description: RAG Bot für den Kanton Basel Stadt
 site_author: Data Competence Center Basel-Stadt
 edit_uri: edit/main/docs/
-repo_name: DCC-BS/rag-application
+repo_name: DCC-BS/rag-backend
 copyright: Maintained by <a href="https://dcc-bs.ch">Data Competence Center Basel-Stadt</a>.
 
 nav:
@@ -45,9 +45,9 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/DCC-BS/rag-application
+      link: https://github.com/DCC-BS/rag-backend
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/rag-application
+      link: https://pypi.org/project/rag-backend
 
 markdown_extensions:
   - toc:
