@@ -2,7 +2,7 @@ FROM python:3.14-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # Install PostgreSQL client for pg_isready command
-RUN apt-get update && apt-get install -y postgresql-client git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y postgresql-client git build-essential && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

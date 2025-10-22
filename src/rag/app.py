@@ -110,10 +110,11 @@ async def chat(
 
     async def event_generator() -> AsyncGenerator[str, Any]:
         try:
+            thread_id = str(chat_message.thread_id) + current_user.oid if current_user.oid else ""
             async for event in pipeline.astream_query(
                 message=chat_message.message,
                 user_organizations=current_user.roles,
-                thread_id=chat_message.thread_id,
+                thread_id=thread_id,
                 document_ids=chat_message.document_ids,
             ):
                 yield f"{event.model_dump_json()}{CONST_SPLIT_STRING}"
