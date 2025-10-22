@@ -1,6 +1,6 @@
 from typing import Any, Protocol, override
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_core.runnables import RunnableConfig
 
 from rag.actions.action_protocol import ActionProtocol

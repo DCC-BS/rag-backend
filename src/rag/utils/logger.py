@@ -58,7 +58,8 @@ def init_logger() -> None:
         processors.append(structlog.processors.JSONRenderer())
     else:
         # For development, use a colored console renderer
-        processors.append(structlog.dev.ConsoleRenderer(colors=True))
+        exception_processor = structlog.dev.RichTracebackFormatter(suppress=["langgraph"])
+        processors.append(structlog.dev.ConsoleRenderer(colors=True, exception_formatter=exception_processor))
 
     # Configure structlog
     structlog.configure(

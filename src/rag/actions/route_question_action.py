@@ -1,6 +1,6 @@
 from typing import Any, Literal, override
 
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.config import get_stream_writer
@@ -46,7 +46,7 @@ class RouteQuestionAction(ActionProtocol):
         self.logger.debug("---ROUTE QUESTION---")
         writer = get_stream_writer()
         writer("chat.status.routingQuestion")
-        if "context" not in state or state.context is None:
+        if state.context is None or len(state.context) == 0:
             self.logger.debug("---ROUTE QUESTION TO RETRIEVAL---")
             return Command(
                 update={"route_query": "retrieval"},

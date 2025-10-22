@@ -81,7 +81,7 @@ class SHRAGPipeline:
         # Add conditional edges for routing and grading
         _ = workflow.add_conditional_edges(
             source="route_question",
-            path=lambda state: state.route_query,
+            path=lambda state: state.route_query if state.route_query else "retrieval",
             path_map={
                 "retrieval": "retrieve",
                 "answer": "generate_answer",

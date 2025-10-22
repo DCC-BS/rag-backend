@@ -7,10 +7,10 @@ license = "MIT"
 license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.13,<4.0"
 dependencies = [
-    "langchain-openai>=0.2.14",
-    "langchain>=0.3.14",
+    "langchain-openai>=1.0.0",
+    "langchain>=1.0.0",
     "omegaconf>=2.3.0",
-    "langgraph>=0.2.63",
+    "langgraph>=1.0.0",
     "fastapi[standard]>=0.115.8",
     "structlog>=25.1.0",
     "version-pioneer>=0.0.13",
@@ -22,6 +22,7 @@ dependencies = [
     "boto3>=1.38.44",
     "fastapi-azure-auth>=5.1.1",
     "httpx>=0.28.1",
+    "langchain-core>=1.0.0",
 ]
 
 [[tool.uv.index]]

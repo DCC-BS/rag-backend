@@ -1,9 +1,8 @@
 from datetime import datetime
 from typing import Any, override
 
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import BaseMessage
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.config import get_stream_writer

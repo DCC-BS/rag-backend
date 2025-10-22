@@ -3,11 +3,9 @@ from typing import Any, override
 
 import cohere
 from cohere.v2.types.v2rerank_response import V2RerankResponse
-from langchain.schema import (
-    BaseRetriever,
-    Document as LangChainDocument,
-)
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.documents import Document as LangChainDocument
+from langchain_core.retrievers import BaseRetriever
 from openai import Client
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import ARRAY, Engine, Integer, String, Text, bindparam, create_engine, select, text
