@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /bin/uv
 
 # Install PostgreSQL client for pg_isready command
