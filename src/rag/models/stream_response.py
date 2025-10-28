@@ -51,6 +51,8 @@ class StreamResponse(BaseModel):
     @classmethod
     def create_document_response(cls, sender: Sender, docs: list[Document]) -> "StreamResponse":
         """Create a response containing retrieved documents"""
+        # remove page_content from documents to reduce the size of the response
+        docs = [Document(page_content="", metadata=doc.metadata) for doc in docs]
         return cls(type=StreamResponseType.DOCUMENTS, sender=sender, metadata={"documents": docs})
 
     @classmethod
