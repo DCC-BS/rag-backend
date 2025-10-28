@@ -1,11 +1,14 @@
 """S3 utilities for MinIO/S3 operations."""
+# pyright: reportMissingTypeStubs=false
 
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
+import boto3  # type: ignore[reportMissingTypeStubs]
+from botocore.exceptions import ClientError, NoCredentialsError  # type: ignore[reportMissingTypeStubs]
+from structlog.stdlib import BoundLogger
 
 from rag.utils.config import AppConfig, ConfigurationManager
 from rag.utils.logger import get_logger
@@ -17,10 +20,10 @@ class S3Utils:
     def __init__(self, config: AppConfig | None = None) -> None:
         """Initialize S3 utilities with configuration."""
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger = get_logger()
-        self.s3_client = self._setup_client()
+        self.logger: BoundLogger = get_logger()
+        self.s3_client: Any = self._setup_client()
 
-    def _setup_client(self):
+    def _setup_client(self) -> Any:
         """Set up and configure the S3 client for MinIO."""
         try:
             client = boto3.client(
@@ -30,8 +33,6 @@ class S3Utils:
                 aws_secret_access_key=self.config.INGESTION.S3_SECRET_KEY,
                 region_name="us-east-1",  # MinIO default
             )
-            # Test connection
-            client.list_buckets()
         except NoCredentialsError:
             self.logger.exception("S3 credentials not provided")
             raise
@@ -45,16 +46,20 @@ class S3Utils:
             self.logger.info("Successfully connected to S3/MinIO", endpoint=self.config.INGESTION.S3_ENDPOINT)
             return client
 
-    def get_bucket_name(self, access_role: str) -> str:
-        """Get bucket name for an access role."""
-        return f"{self.config.INGESTION.BUCKET_PREFIX}-{access_role.lower()}"
+    def get_bucket_name(self) -> str:
+        """Get the single bucket name from environment variable.
+
+        Defaults to "rag-bot" when S3_BUCKET_NAME is not set.
+        """
+        return self.config.INGESTION.S3_BUCKET_NAME
 
     def ensure_bucket_exists(self, bucket_name: str) -> None:
         """Ensure a bucket exists, creating it if necessary."""
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
+            code = (e.response or {}).get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchBucket", "NotFound"):
                 # Bucket doesn't exist, create it
                 try:
                     self.s3_client.create_bucket(Bucket=bucket_name)
@@ -66,23 +71,21 @@ class S3Utils:
                 self.logger.exception(f"Error checking bucket {bucket_name}", error=str(e))
                 raise
 
-    def ensure_buckets_exist_for_roles(self) -> None:
-        """Ensure all required buckets exist for configured roles."""
-        for role in self.config.ROLES:
-            bucket_name = self.get_bucket_name(role)
-            self.ensure_bucket_exists(bucket_name)
+    def ensure_main_bucket_exists(self) -> None:
+        """Ensure the single application bucket exists."""
+        bucket_name = self.get_bucket_name()
+        self.ensure_bucket_exists(bucket_name)
 
     def format_s3_path(self, bucket_name: str, object_key: str) -> str:
         """Format S3 path for consistent logging."""
         return f"s3://{bucket_name}/{object_key}"
 
-    def extract_access_role_from_bucket(self, bucket_name: str) -> str | None:
-        """Extract access role from bucket name."""
-        bucket_parts = bucket_name.split("-")
-        if len(bucket_parts) < 2:
-            self.logger.warning(f"Cannot determine access role from bucket name: {bucket_name}")
-            return None
-        return bucket_parts[-1].upper()
+    def extract_access_role_from_object_key(self, object_key: str) -> str | None:
+        """Extract access role from the first directory segment of the object key."""
+        parts = object_key.split("/", 1)
+        if len(parts) > 1 and parts[0]:
+            return parts[0].strip().upper()
+        return None
 
     def get_tags(self, bucket_name: str, object_key: str) -> dict[str, str]:
         """Get object tags as a dictionary."""
@@ -145,7 +148,8 @@ class S3Utils:
         try:
             self.s3_client.head_object(Bucket=bucket_name, Key=object_key)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
+            code = (e.response or {}).get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchKey", "NotFound"):
                 return False
             # Re-raise other errors (permissions, etc.)
             self.logger.warning(f"Error checking S3 object existence: {bucket_name}/{object_key}", error=str(e))
@@ -208,7 +212,7 @@ class S3DocumentTagger:
         """Initialize S3 document tagger."""
         self.s3_utils: S3Utils = s3_utils
         self.config: AppConfig = config or ConfigurationManager.get_config()
-        self.logger = get_logger()
+        self.logger: BoundLogger = get_logger()
 
         # Error tags for document tagging
         self.error_tags: set[str] = {

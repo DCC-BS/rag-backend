@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 
 @dataclass
@@ -53,7 +53,7 @@ class IngestionConfig:
     S3_ENDPOINT: str
     S3_ACCESS_KEY: str
     S3_SECRET_KEY: str
-    BUCKET_PREFIX: str = "documents"
+    S3_BUCKET_NAME: str
     WATCH_ENABLED: bool = True
     BATCH_SIZE: int = 10
     SCAN_INTERVAL: int = 3600  # seconds
@@ -80,7 +80,6 @@ class AppConfig:
     RERANKER: RerankerConfig
     DOCLING: DoclingConfig
     INGESTION: IngestionConfig
-    ROLES: list[str]
     CORS_ORIGINS: list[str]
     AZURE_CLIENT_ID: str
     AZURE_TENANT_ID: str
@@ -122,13 +121,11 @@ class ConfigurationManager:
     def _load_config(cls) -> AppConfig:
         """Loads and merges configuration files using OmegaConf."""
         if cls._config is None:
-            OmegaConf.clear_resolvers()
-
             # Create base config with schema and set to strict mode
             schema = OmegaConf.structured(AppConfig)
 
             # Create empty config
-            config = OmegaConf.create()
+            config: DictConfig = OmegaConf.create()
 
             # Recursively find all yaml files in conf directory
             conf_dir = Path("src/rag/conf")
@@ -141,8 +138,8 @@ class ConfigurationManager:
             for conf_file in yaml_files:
                 try:
                     with open(conf_file, encoding="utf-8") as f:
-                        file_conf = OmegaConf.load(f)
-                    config = OmegaConf.merge(config, file_conf)
+                        file_conf = cast(DictConfig, OmegaConf.load(f))
+                    config = cast(DictConfig, OmegaConf.merge(config, file_conf))
                 except Exception as err:
                     cls._raise_config_load_error(conf_file, err)
 

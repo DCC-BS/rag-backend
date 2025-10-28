@@ -57,8 +57,7 @@ INGESTION:
   S3_ENDPOINT: "${oc.env:MINIO_ENDPOINT}"
   S3_ACCESS_KEY: "${oc.env:MINIO_ROOT_USER}"
   S3_SECRET_KEY: "${oc.env:MINIO_ROOT_PASSWORD}"
-  BUCKET_PREFIX: "documents"
-  ACCESS_ROLES: ["EL", "SH", "EL2"]
+  S3_BUCKET_NAME: "${oc.env:S3_BUCKET_NAME,rag-bot}"
   WATCH_ENABLED: true
   BATCH_SIZE: 10
   SCAN_INTERVAL: 3600
@@ -116,7 +115,6 @@ graph TD
 
 The service automatically:
 - Creates required buckets on startup if they don't exist
-- Names buckets using the pattern: `{BUCKET_PREFIX}-{access_role}`
 - Ensures proper isolation between access roles
 
 ## Document State Management

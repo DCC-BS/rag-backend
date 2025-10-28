@@ -3,10 +3,10 @@ INGESTION:
   S3_ENDPOINT: "${oc.env:MINIO_ENDPOINT}"
   S3_ACCESS_KEY: "${oc.env:MINIO_ROOT_USER}"
   S3_SECRET_KEY: "${oc.env:MINIO_ROOT_PASSWORD}"
-  BUCKET_PREFIX: "documents"
+  S3_BUCKET_NAME: "${oc.env:S3_BUCKET_NAME,rag-bot}"
   WATCH_ENABLED: true
   BATCH_SIZE: 10
-  SCAN_INTERVAL: 300
+  SCAN_INTERVAL: 30
   PROCESSED_TAG: "ingestion_processed"
   UNPROCESSABLE_TAG: "unprocessable"
   NOT_SUPPORTED_FILE_TAG: "not_supported_file"

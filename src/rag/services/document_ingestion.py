@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError  # type: ignore[reportMissingTypeStubs]
+
+# pyright: reportMissingTypeStubs=false
 from openai import Client
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, selectinload
@@ -115,7 +117,7 @@ class S3DocumentIngestionService:
             document_path=document_path,
             mime_type=chunks[0].metadata.get("mimetype", "unknown"),
             num_pages=chunks[0].metadata.get("num_pages"),
-            access_roles=[access_role],
+            access_roles=[access_role.upper()],
         )
         session.add(document)
         session.flush()  # Get the document ID
@@ -175,9 +177,19 @@ class S3DocumentIngestionService:
 
         s3_path = self.s3_utils.format_s3_path(bucket_name, object_key)
 
-        # Extract access role from bucket name
-        access_role = self.s3_utils.extract_access_role_from_bucket(bucket_name)
+        # Extract access role from object key (top-level directory)
+        access_role = self.s3_utils.extract_access_role_from_object_key(object_key)
+        access_role = access_role.upper() if access_role else None
         if not access_role:
+            # Tag and skip when object has no role prefix
+            self.logger.warning(f"Missing role prefix: {s3_path}")
+            self.s3_tagger.add_error_tag(
+                bucket_name,
+                object_key,
+                self.config.INGESTION.UNPROCESSABLE_TAG,
+                "Missing role prefix",
+            )
+            self._update_stats("unprocessable")
             return
 
         document_path = self.s3_utils.format_s3_path(bucket_name, object_key)
@@ -217,7 +229,8 @@ class S3DocumentIngestionService:
             self.logger.info(f"Found {total_objects} objects in bucket {bucket_name}")
 
             for i, obj_info in enumerate(objects_to_process):
-                self.logger.info(f"Processing object {i + 1}/{total_objects}: {obj_info["key"]}")
+                key = obj_info["key"]
+                self.logger.info(f"Processing object {i + 1}/{total_objects}: {key}")
                 self.process_s3_object(bucket_name, obj_info["key"], obj_info["last_modified"])
 
         except ClientError as e:
@@ -258,13 +271,12 @@ class S3DocumentIngestionService:
         cleanup_stats = self.cleanup_orphaned_documents()
         self.stats["orphaned_cleaned"] = cleanup_stats["deleted_documents"]
 
-        # Ensure buckets exist
-        self.s3_utils.ensure_buckets_exist_for_roles()
+        # Ensure main bucket exists
+        self.s3_utils.ensure_main_bucket_exists()
 
-        # Scan each bucket
-        for role in self.config.ROLES:
-            bucket_name = self.s3_utils.get_bucket_name(role)
-            self.scan_bucket(bucket_name)
+        # Scan the single bucket
+        bucket_name = self.s3_utils.get_bucket_name()
+        self.scan_bucket(bucket_name)
 
         self.log_statistics()
         self.logger.info("Initial S3 document scan completed")
@@ -275,22 +287,21 @@ class S3DocumentIngestionService:
 
         while True:
             try:
-                for role in self.config.ROLES:
-                    bucket_name = self.s3_utils.get_bucket_name(role)
+                bucket_name = self.s3_utils.get_bucket_name()
 
-                    # Simple approach: scan for unprocessed objects
-                    paginator = self.s3_utils.s3_client.get_paginator("list_objects_v2")
-                    page_iterator = paginator.paginate(Bucket=bucket_name)
+                # Simple approach: scan for unprocessed objects
+                paginator = self.s3_utils.s3_client.get_paginator("list_objects_v2")
+                page_iterator = paginator.paginate(Bucket=bucket_name)
 
-                    for page in page_iterator:
-                        for obj in page.get("Contents", []):
-                            # Check if object is unprocessed and doesn't have error tags
-                            if not self.s3_tagger.is_document_processed(
-                                bucket_name, obj["Key"]
-                            ) and not self.s3_tagger.has_error_tag(bucket_name, obj["Key"]):
-                                s3_path = self.s3_utils.format_s3_path(bucket_name, obj["Key"])
-                                self.logger.info(f"Found unprocessed object: {s3_path}")
-                                self.process_s3_object(bucket_name, obj["Key"], obj["LastModified"])
+                for page in page_iterator:
+                    for obj in page.get("Contents", []):
+                        # Check if object is unprocessed and doesn't have error tags
+                        if not self.s3_tagger.is_document_processed(
+                            bucket_name, obj["Key"]
+                        ) and not self.s3_tagger.has_error_tag(bucket_name, obj["Key"]):
+                            s3_path = self.s3_utils.format_s3_path(bucket_name, obj["Key"])
+                            self.logger.info(f"Found unprocessed object: {s3_path}")
+                            self.process_s3_object(bucket_name, obj["Key"], obj["LastModified"])
 
                 # Wait before next scan
                 await asyncio.sleep(self.config.INGESTION.SCAN_INTERVAL)

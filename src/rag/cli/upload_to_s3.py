@@ -24,7 +24,7 @@ class S3DocumentUploader:
 
     def upload_directory(self, local_dir: Path, access_role: str, preserve_structure: bool = True) -> None:
         """Upload all supported files from a directory to the appropriate S3 bucket."""
-        bucket_name = self.s3_utils.get_bucket_name(access_role)
+        bucket_name = self.s3_utils.get_bucket_name()
         self.s3_utils.ensure_bucket_exists(bucket_name)
 
         # Find all supported files
@@ -51,6 +51,9 @@ class S3DocumentUploader:
 
             # Normalize the object key to make it machine-readable
             object_key = S3Utils.normalize_path(object_key)
+
+            # Prefix with role directory (uppercased)
+            object_key = f"{access_role.upper()}/{object_key}"
 
             if self.s3_utils.upload_file(file_path, bucket_name, object_key):
                 success_count += 1
@@ -105,7 +108,7 @@ def main() -> None:
     # Command: upload-role (uploads specific access role directory)
     upload_role_parser = subparsers.add_parser("upload-role", help="Upload documents for a specific access role")
     _ = upload_role_parser.add_argument("source_dir", type=Path, help="Source directory containing documents to upload")
-    _ = upload_role_parser.add_argument("access_role", help="Access role (determines target bucket), e.g., EL, SH, EL2")
+    _ = upload_role_parser.add_argument("access_role", help="Access role (determines S3 key prefix), e.g., EL, SH, EL2")
     _ = upload_role_parser.add_argument(
         "--flat", action="store_true", help="Upload files without preserving directory structure (flatten)"
     )

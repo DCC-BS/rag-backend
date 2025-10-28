@@ -131,7 +131,7 @@ Deletes a document from both S3 and the database.
 ## File Processing
 
 - Uploaded files are automatically normalized (special characters, umlauts, spaces converted to underscores)
-- Files are stored in S3 buckets specific to each access role (format: `{bucket_prefix}-{role}`)
+- Files are stored in S3 buckets
 - The document ingestion service will automatically process uploaded files for search indexing
 - Updated documents will be reprocessed by the ingestion service when detected
 
