@@ -84,8 +84,10 @@ class S3Utils:
 
     def extract_access_role_from_object_key(self, object_key: str) -> str | None:
         """Extract access role from the first directory segment of the object key."""
-        first_segment = object_key.split("/", 1)[0].strip()
-        return first_segment.upper() if first_segment else None
+        parts = object_key.split("/", 1)
+        if len(parts) > 1 and parts[0]:
+            return parts[0].strip().upper()
+        return None
 
     def get_tags(self, bucket_name: str, object_key: str) -> dict[str, str]:
         """Get object tags as a dictionary."""
