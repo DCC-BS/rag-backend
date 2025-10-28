@@ -395,6 +395,6 @@ class DocumentManagementService:
         if self.s3_utils.object_exists(bucket_name, object_key):
             return f"File already exists: {filename}"
         # Check if supported file type
-        if "." + filename.split(".")[-1] not in DoclingAPILoader.SUPPORTED_FORMATS:
-            return f"Unsupported file type: {filename.split(".")[-1]}"
+        if Path(filename).suffix.lower() not in DoclingAPILoader.SUPPORTED_FORMATS:
+            return f"Unsupported file type: {Path(filename).suffix.lower()}"
         return None
