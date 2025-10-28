@@ -24,7 +24,7 @@ class S3DocumentUploader:
 
     def upload_directory(self, local_dir: Path, access_role: str, preserve_structure: bool = True) -> None:
         """Upload all supported files from a directory to the appropriate S3 bucket."""
-        bucket_name = self.s3_utils.get_bucket_name(access_role)
+        bucket_name = self.s3_utils.get_bucket_name()
         self.s3_utils.ensure_bucket_exists(bucket_name)
 
         # Find all supported files
@@ -51,6 +51,9 @@ class S3DocumentUploader:
 
             # Normalize the object key to make it machine-readable
             object_key = S3Utils.normalize_path(object_key)
+
+            # Prefix with role directory (uppercased)
+            object_key = f"{access_role.upper()}/{object_key}"
 
             if self.s3_utils.upload_file(file_path, bucket_name, object_key):
                 success_count += 1

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 
 @dataclass
@@ -80,7 +80,6 @@ class AppConfig:
     RERANKER: RerankerConfig
     DOCLING: DoclingConfig
     INGESTION: IngestionConfig
-    ROLES: list[str]
     CORS_ORIGINS: list[str]
     AZURE_CLIENT_ID: str
     AZURE_TENANT_ID: str
@@ -128,7 +127,7 @@ class ConfigurationManager:
             schema = OmegaConf.structured(AppConfig)
 
             # Create empty config
-            config = OmegaConf.create()
+            config: DictConfig = OmegaConf.create()
 
             # Recursively find all yaml files in conf directory
             conf_dir = Path("src/rag/conf")
@@ -141,8 +140,8 @@ class ConfigurationManager:
             for conf_file in yaml_files:
                 try:
                     with open(conf_file, encoding="utf-8") as f:
-                        file_conf = OmegaConf.load(f)
-                    config = OmegaConf.merge(config, file_conf)
+                        file_conf = cast(DictConfig, OmegaConf.load(f))
+                    config = cast(DictConfig, OmegaConf.merge(config, file_conf))
                 except Exception as err:
                     cls._raise_config_load_error(conf_file, err)
 

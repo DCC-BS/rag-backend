@@ -70,8 +70,10 @@ class DocumentManagementService:
         """
         try:
             with Session(self.engine) as session:
+                # Normalize roles to uppercase for case-insensitive matching
+                normalized_access_roles = [r.upper() for r in access_roles]
                 # Query documents that have at least one matching access role
-                stmt = select(Document).where(Document.access_roles.op("&&")(access_roles))
+                stmt = select(Document).where(Document.access_roles.op("&&")(normalized_access_roles))
                 documents = session.execute(stmt).scalars().all()
 
                 return [
@@ -115,8 +117,8 @@ class DocumentManagementService:
                 if not document:
                     self._raise_document_not_found()
 
-                # Check if user has access to this document
-                if not any(role in document.access_roles for role in access_roles):
+                # Check if user has access to this document (normalize roles)
+                if not any(role.upper() in document.access_roles for role in access_roles):
                     self._raise_access_denied()
 
                 # Extract bucket and object key from document_path
@@ -153,8 +155,9 @@ class DocumentManagementService:
             List of document metadata dictionaries
         """
         try:
+            normalized_access_roles = [r.upper() for r in access_roles]
             documents: list[LangChainDocument] = self.retriever.invoke(
-                input=query, user_roles=access_roles, top_k=limit
+                input=query, user_roles=normalized_access_roles, top_k=limit
             )
             return [doc.metadata for doc in documents]
         except Exception as e:
@@ -177,20 +180,24 @@ class DocumentManagementService:
         Raises:
             HTTPException: If access denied or upload fails
         """
+        # Normalize roles to UPPERCASE
+        access_role_upper = access_role.upper()
+        normalized_user_roles = [r.upper() for r in user_access_roles]
+
         # Validate user has access to the specified role
-        if access_role not in user_access_roles:
+        if access_role_upper not in normalized_user_roles:
             self._raise_access_denied(f"Access denied to role: {access_role}")
 
         # Validate file
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File name is required")
 
-        # Get bucket name for the role
-        bucket_name = self.s3_utils.get_bucket_name(access_role)
+        # Get single bucket name
+        bucket_name = self.s3_utils.get_bucket_name()
 
         # Normalize the file name for S3
         normalized_filename = S3Utils.normalize_path(file.filename)
-        object_key = normalized_filename
+        object_key = f"{access_role_upper}/{normalized_filename}"
 
         error_message = self._validate_file(file.filename, bucket_name, object_key)
         if error_message:
@@ -255,8 +262,8 @@ class DocumentManagementService:
                 if not document:
                     self._raise_document_not_found()
 
-                # Check if user has access to this document through the specified role
-                if not any(role in document.access_roles for role in user_access_roles):
+                # Check if user has access to this document through the specified role (normalize roles)
+                if not any(role.upper() in document.access_roles for role in user_access_roles):
                     self._raise_access_denied("Access denied to this document in the specified role")
 
                 # Extract bucket and object key from document_path
@@ -307,8 +314,12 @@ class DocumentManagementService:
         Raises:
             HTTPException: If document not found, access denied, or update fails
         """
+        # Normalize roles to UPPERCASE
+        access_role_upper = access_role.upper()
+        normalized_user_roles = [r.upper() for r in user_access_roles]
+
         # Validate user has access to the specified role
-        if access_role not in user_access_roles:
+        if access_role_upper not in normalized_user_roles:
             self._raise_access_denied(f"Access denied to role: {access_role}")
 
         # Validate file
@@ -325,7 +336,7 @@ class DocumentManagementService:
                     self._raise_document_not_found()
 
                 # Check if user has access to this document through the specified role
-                if access_role not in document.access_roles:
+                if access_role_upper not in document.access_roles:
                     self._raise_access_denied("Access denied to this document in the specified role")
 
                 # Extract bucket and object key from document_path
@@ -386,3 +397,4 @@ class DocumentManagementService:
         # Check if supported file type
         if "." + filename.split(".")[-1] not in DoclingAPILoader.SUPPORTED_FORMATS:
             return f"Unsupported file type: {filename.split(".")[-1]}"
+        return None
