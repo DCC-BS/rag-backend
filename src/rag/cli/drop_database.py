@@ -42,8 +42,8 @@ def drop_schema_cascade(engine: Engine, schema: str = "public") -> None:
     logger = get_logger()
     with engine.begin() as connection:
         logger.warning("Dropping schema with CASCADE", schema=schema)
-        connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
-        connection.execute(text(f"CREATE SCHEMA {schema}"))
+        connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     logger.info("Schema dropped and recreated successfully", schema=schema)
 
 
