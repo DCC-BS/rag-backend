@@ -108,7 +108,7 @@ def main() -> None:
     # Command: upload-role (uploads specific access role directory)
     upload_role_parser = subparsers.add_parser("upload-role", help="Upload documents for a specific access role")
     _ = upload_role_parser.add_argument("source_dir", type=Path, help="Source directory containing documents to upload")
-    _ = upload_role_parser.add_argument("access_role", help="Access role (determines target bucket), e.g., EL, SH, EL2")
+    _ = upload_role_parser.add_argument("access_role", help="Access role (determines S3 key prefix), e.g., EL, SH, EL2")
     _ = upload_role_parser.add_argument(
         "--flat", action="store_true", help="Upload files without preserving directory structure (flatten)"
     )

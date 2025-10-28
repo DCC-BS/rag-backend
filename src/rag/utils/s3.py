@@ -33,8 +33,6 @@ class S3Utils:
                 aws_secret_access_key=self.config.INGESTION.S3_SECRET_KEY,
                 region_name="us-east-1",  # MinIO default
             )
-            # Test connection
-            client.list_buckets()
         except NoCredentialsError:
             self.logger.exception("S3 credentials not provided")
             raise
@@ -60,7 +58,8 @@ class S3Utils:
         try:
             self.s3_client.head_bucket(Bucket=bucket_name)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
+            code = (e.response or {}).get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchBucket", "NotFound"):
                 # Bucket doesn't exist, create it
                 try:
                     self.s3_client.create_bucket(Bucket=bucket_name)
@@ -149,7 +148,8 @@ class S3Utils:
         try:
             self.s3_client.head_object(Bucket=bucket_name, Key=object_key)
         except ClientError as e:
-            if e.response["Error"]["Code"] == "404":
+            code = (e.response or {}).get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchKey", "NotFound"):
                 return False
             # Re-raise other errors (permissions, etc.)
             self.logger.warning(f"Error checking S3 object existence: {bucket_name}/{object_key}", error=str(e))

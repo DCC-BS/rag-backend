@@ -121,8 +121,6 @@ class ConfigurationManager:
     def _load_config(cls) -> AppConfig:
         """Loads and merges configuration files using OmegaConf."""
         if cls._config is None:
-            OmegaConf.clear_resolvers()
-
             # Create base config with schema and set to strict mode
             schema = OmegaConf.structured(AppConfig)
 

@@ -179,6 +179,7 @@ class S3DocumentIngestionService:
 
         # Extract access role from object key (top-level directory)
         access_role = self.s3_utils.extract_access_role_from_object_key(object_key)
+        access_role = access_role.upper() if access_role else None
         if not access_role:
             # Tag and skip when object has no role prefix
             self.logger.warning(f"Missing role prefix: {s3_path}")
@@ -228,7 +229,8 @@ class S3DocumentIngestionService:
             self.logger.info(f"Found {total_objects} objects in bucket {bucket_name}")
 
             for i, obj_info in enumerate(objects_to_process):
-                self.logger.info(f"Processing object {i + 1}/{total_objects}: {obj_info["key"]}")
+                key = obj_info["key"]
+                self.logger.info(f"Processing object {i + 1}/{total_objects}: {key}")
                 self.process_s3_object(bucket_name, obj_info["key"], obj_info["last_modified"])
 
         except ClientError as e:

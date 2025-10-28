@@ -2,13 +2,17 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, cast, override
 
+from langchain_core.language_models.base import LanguageModelInput
 from langchain_core.messages import AnyMessage, BaseMessage, SystemMessage
+from langchain_core.messages.ai import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.base import Runnable
 from langchain_openai import ChatOpenAI
 from langgraph.config import get_stream_writer
 from langgraph.types import StreamWriter
 from openai import BadRequestError
+from structlog.stdlib import BoundLogger
 
 from rag.actions.action_protocol import ActionProtocol
 from rag.models.rag_states import RAGState
@@ -44,9 +48,9 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
 1. ** Rich in Vitamins and Minerals: **\n * Fruits are packed with vitamins like Vitamin C (important for immunity and skin health), Vitamin A (for vision and immune function), and B vitamins (for energy and metabolism). \n * They also provide crucial minerals such as potassium (for healthy blood pressure and muscle function), magnesium, and folate. <ref>2</ref> <ref>3</ref>"""
 
     def __init__(self, llm: ChatOpenAI) -> None:
-        self.logger = get_logger()
-        self.llm = llm.bind_tools([multiply, add, subtract, divide, square])
-        self.summarizer = MessageHistorySummarizer(llm=llm)
+        self.logger: BoundLogger = get_logger()
+        self.llm: Runnable[LanguageModelInput, AIMessage] = llm.bind_tools([multiply, add, subtract, divide, square])
+        self.summarizer: MessageHistorySummarizer = MessageHistorySummarizer(llm=llm)
 
     @override
     def __call__(self, state: RAGState, config: RunnableConfig):
@@ -70,7 +74,7 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
         writer = get_stream_writer()
         writer("chat.status.generatingAnswer")
 
-        response = self._generate_with_retry(state, messages_for_generation, prompt_with_context, config, writer)
+        response = self._generate_with_retry(state, messages_for_generation, config, writer)
         user_message = self._create_user_message(state.input, config)
 
         return {"messages": [*list(user_message.to_messages()), response]}
@@ -96,7 +100,7 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
 </file_id>
 </document>
             """
-            for idx, doc in enumerate(state.context)  # pyright: ignore[reportOptionalIterable]
+            for idx, doc in enumerate(state.context or [])
         ]
         return "\n\n".join(formatted_docs)
 
@@ -127,7 +131,9 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
 
     def _is_context_length_error(self, error: BadRequestError) -> bool:
         """Check if error is due to context length exceeded."""
-        return "maximum context length" in str(error).lower() and error.status_code == 400
+        msg = str(error).lower()
+        code = getattr(error, "code", None)
+        return (code == "context_length_exceeded") or ("maximum context length" in msg and error.status_code == 400)
 
     def _handle_context_length_error(
         self,

@@ -94,6 +94,8 @@ def main() -> None:
     except Exception as e:
         logger.exception("Failed to drop database", error=str(e))
         sys.exit(1)
+    finally:
+        engine.dispose() if engine else None  # pyright: ignore[reportPossiblyUnboundVariable]
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
@@ -208,9 +209,9 @@ class DocumentManagementService:
         try:
             # Create temporary file to upload
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                # Read file content
-                content = file.file.read()
-                tmp_file.write(content)
+                # Stream to disk (no large in-memory buffer)
+                file.file.seek(0)
+                shutil.copyfileobj(file.file, tmp_file)
                 tmp_file_path = Path(tmp_file.name)
 
             try:
@@ -228,7 +229,7 @@ class DocumentManagementService:
                     "object_key": object_key,
                     "original_filename": file.filename,
                     "normalized_filename": normalized_filename,
-                    "size": len(content),
+                    "size": tmp_file_path.stat().st_size,
                 }
 
             finally:
@@ -265,7 +266,9 @@ class DocumentManagementService:
                     self._raise_document_not_found()
 
                 # Check if user has access to this document through the specified role (normalize roles)
-                if not any(role.upper() in document.access_roles for role in user_access_roles):
+                doc_roles = set(document.access_roles or [])
+                user_roles = {r.upper() for r in user_access_roles}
+                if not (doc_roles & user_roles):
                     self._raise_access_denied("Access denied to this document in the specified role")
 
                 # Extract bucket and object key from document_path
@@ -318,7 +321,7 @@ class DocumentManagementService:
         """
         # Normalize roles to UPPERCASE
         access_role_upper = access_role.upper()
-        normalized_user_roles = [r.upper() for r in user_access_roles]
+        normalized_user_roles = {r.upper() for r in user_access_roles}
 
         # Validate user has access to the specified role
         if access_role_upper not in normalized_user_roles:
@@ -338,7 +341,8 @@ class DocumentManagementService:
                     self._raise_document_not_found()
 
                 # Check if user has access to this document through the specified role
-                if access_role_upper not in document.access_roles:
+                doc_roles = set(document.access_roles or [])
+                if access_role_upper not in doc_roles:
                     self._raise_access_denied("Access denied to this document in the specified role")
 
                 # Extract bucket and object key from document_path

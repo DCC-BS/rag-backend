@@ -162,7 +162,7 @@ Format your summary as a narrative that captures the essence of the conversation
     def _extract_text_from_list(self, content_list: list[str | dict[str, str]]) -> str:
         """Extract text from structured content list."""
         text_parts = [
-            str(item["text"]) if isinstance(item, dict) and "text" in item else str(item)
+            (str(item["text"]) if isinstance(item, dict) and "text" in item else str(item))
             for item in content_list
             if isinstance(item, dict | str)
         ]
