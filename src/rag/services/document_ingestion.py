@@ -117,7 +117,7 @@ class S3DocumentIngestionService:
             document_path=document_path,
             mime_type=chunks[0].metadata.get("mimetype", "unknown"),
             num_pages=chunks[0].metadata.get("num_pages"),
-            access_roles=[access_role],
+            access_roles=[access_role.upper()],
         )
         session.add(document)
         session.flush()  # Get the document ID

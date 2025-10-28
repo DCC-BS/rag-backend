@@ -53,7 +53,7 @@ class IngestionConfig:
     S3_ENDPOINT: str
     S3_ACCESS_KEY: str
     S3_SECRET_KEY: str
-    BUCKET_PREFIX: str = "documents"
+    S3_BUCKET_NAME: str
     WATCH_ENABLED: bool = True
     BATCH_SIZE: int = 10
     SCAN_INTERVAL: int = 3600  # seconds

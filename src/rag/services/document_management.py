@@ -118,7 +118,9 @@ class DocumentManagementService:
                     self._raise_document_not_found()
 
                 # Check if user has access to this document (normalize roles)
-                if not any(role.upper() in document.access_roles for role in access_roles):
+                doc_roles = set(document.access_roles or [])
+                user_roles = {r.upper() for r in access_roles}
+                if not (doc_roles & user_roles):
                     self._raise_access_denied()
 
                 # Extract bucket and object key from document_path

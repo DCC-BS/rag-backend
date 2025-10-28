@@ -32,6 +32,7 @@ explicit = true
 
 [project.scripts]
 rag-upload-s3 = "rag.cli.upload_to_s3:main"
+rag-drop-db = "rag.cli.drop_database:main"
 
 [project.urls]
 Homepage = "https://DCC-BS.github.io/rag-application/"

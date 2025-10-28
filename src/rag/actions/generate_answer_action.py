@@ -114,7 +114,6 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
         self,
         state: RAGState,
         messages_for_generation: Sequence[BaseMessage],
-        prompt_with_context,
         config: RunnableConfig,
         writer: StreamWriter,
     ) -> BaseMessage:
@@ -123,7 +122,7 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
             return self.llm.invoke(messages_for_generation, config)
         except BadRequestError as e:
             if self._is_context_length_error(e):
-                return self._handle_context_length_error(state, prompt_with_context, config, writer, e)
+                return self._handle_context_length_error(state, config, writer, e)
             raise
 
     def _is_context_length_error(self, error: BadRequestError) -> bool:
@@ -133,7 +132,6 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
     def _handle_context_length_error(
         self,
         state: RAGState,
-        prompt_with_context,
         config: RunnableConfig,
         writer: StreamWriter,
         error: BadRequestError,
@@ -146,12 +144,11 @@ Fruits are incredibly healthy due to their rich content of essential vitamins, m
         )
 
         summarized_messages = self._summarize_history(state)
-        messages_for_generation = summarized_messages + list(prompt_with_context.to_messages())
 
         self.logger.info("Retrying with summarized message history")
         writer("chat.status.retryingWithSummarizedHistory")
 
-        response = self._retry_with_summary(messages_for_generation, config)
+        response = self._retry_with_summary(summarized_messages, config)
         state.messages = cast(list[AnyMessage], summarized_messages)
 
         return response

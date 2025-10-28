@@ -35,9 +35,7 @@ Format your summary as a narrative that captures the essence of the conversation
         self.llm: ChatOpenAI = llm
 
     def summarize_messages(
-        self,
-        messages: list[AnyMessage],
-        system_prompt: str | None = None,
+        self, messages: list[AnyMessage], system_prompt: str | None = None, keep_last_n: int = 1
     ) -> list[BaseMessage]:
         """
         Summarize the message history to reduce token count.
@@ -52,13 +50,21 @@ Format your summary as a narrative that captures the essence of the conversation
         self.logger.info("Starting message history summarization")
 
         system_message, messages_to_summarize = self._extract_messages(messages)
+        # Split into prior history and messages to keep (e.g., the latest user turn)
+        keep_last_n = max(0, keep_last_n)
+        history, tail = (
+            (messages_to_summarize[:-keep_last_n], messages_to_summarize[-keep_last_n:])
+            if keep_last_n > 0
+            else (messages_to_summarize, [])
+        )
 
-        if not messages_to_summarize:
+        if not history:
             self.logger.warning("No messages to summarize, returning original messages")
             return list(messages)
 
-        summary_text = self._generate_summary(messages_to_summarize)
+        summary_text = self._generate_summary(history)
         new_messages = self._build_message_list(system_message, system_prompt, summary_text)
+        new_messages.extend(tail)
 
         self.logger.info(
             "Message history summarized",

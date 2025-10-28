@@ -18,10 +18,12 @@ from rag.models.db_document import Base
 from rag.utils.db import get_db_url
 from rag.utils.logger import get_logger
 
+logger = get_logger()
+
 
 def drop_app_tables(engine: Engine) -> None:
     """Drop only application-managed tables using ORM metadata (safe by default)."""
-    logger = get_logger()
+
     with engine.begin() as connection:
         logger.warning("Dropping application tables via ORM metadata")
         Base.metadata.drop_all(bind=connection)
@@ -30,7 +32,6 @@ def drop_app_tables(engine: Engine) -> None:
 
 def drop_alembic_version(engine: Engine) -> None:
     """Drop the alembic_version table if present."""
-    logger = get_logger()
     with engine.begin() as connection:
         logger.warning("Dropping alembic_version table if it exists")
         connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
@@ -39,7 +40,6 @@ def drop_alembic_version(engine: Engine) -> None:
 
 def drop_schema_cascade(engine: Engine, schema: str = "public") -> None:
     """Drop and recreate the given schema using CASCADE (PostgreSQL)."""
-    logger = get_logger()
     with engine.begin() as connection:
         logger.warning("Dropping schema with CASCADE", schema=schema)
         connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
@@ -69,8 +69,6 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-
-    logger = get_logger()
 
     if not args.yes:
         logger.error("Confirmation required. Re-run with --yes to proceed.")

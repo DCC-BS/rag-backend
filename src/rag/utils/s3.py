@@ -1,7 +1,6 @@
 """S3 utilities for MinIO/S3 operations."""
 # pyright: reportMissingTypeStubs=false
 
-import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,7 +53,7 @@ class S3Utils:
 
         Defaults to "rag-bot" when S3_BUCKET_NAME is not set.
         """
-        return os.environ.get("S3_BUCKET_NAME", "rag-bot")
+        return self.config.INGESTION.S3_BUCKET_NAME
 
     def ensure_bucket_exists(self, bucket_name: str) -> None:
         """Ensure a bucket exists, creating it if necessary."""
