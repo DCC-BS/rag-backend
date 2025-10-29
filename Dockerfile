@@ -33,5 +33,3 @@ RUN chown -R ${APP_UID}:${APP_GID} /app ${HOME}
 USER ${APP_UID}:${APP_GID}
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-
-CMD uv run uvicorn src.rag.app:app --port ${BACKEND_PORT} --host ${BACKEND_HOST}

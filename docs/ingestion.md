@@ -54,7 +54,7 @@ The ingestion service is configured via the YAML configuration files in `src/rag
 # ingestion.yaml
 INGESTION:
   STORAGE_TYPE: "s3"
-  S3_ENDPOINT: "${oc.env:MINIO_ENDPOINT}"
+  S3_ENDPOINT: "${oc.env:S3_ENDPOINT}"
   S3_ACCESS_KEY: "${oc.env:MINIO_ROOT_USER}"
   S3_SECRET_KEY: "${oc.env:MINIO_ROOT_PASSWORD}"
   S3_BUCKET_NAME: "${oc.env:S3_BUCKET_NAME,rag-bot}"
@@ -73,7 +73,7 @@ INGESTION:
 # Set environment variables:
 export MINIO_ROOT_USER=minioadmin
 export MINIO_ROOT_PASSWORD=minioadmin
-export MINIO_ENDPOINT=http://localhost:9000
+export S3_ENDPOINT=http://localhost:9000
 
 # Run the ingestion service
 ./run_ingestion.sh

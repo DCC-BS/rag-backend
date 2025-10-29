@@ -2,25 +2,31 @@
 
 set -e
 
-# Wait for the database to be ready
-# A simple loop to check for the database connection
+MODE="${RAG_MODE:-api}"
+
+if [ "$MODE" = "api" ]; then
+echo "Mode: api - waiting for PostgreSQL and running migrations..."
 echo "Waiting for PostgreSQL to be ready..."
 until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -q; do
   sleep 1
 done
 echo "PostgreSQL is ready."
 
-# Create database if it doesn't exist
 echo "Creating database if it doesn't exist..."
 PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tc "SELECT 1 FROM pg_database WHERE datname = '$POSTGRES_DB'" | grep -q 1 || PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE \"$POSTGRES_DB\""
 echo "Database is ready."
 
-# Run Alembic migrations
 echo "Running database migrations..."
 uv run alembic upgrade head
 
-# Start the FastAPI application
-# The "$@" part means "execute any commands passed to this script"
-# This allows you to still pass arguments like --host or --port if needed.
 echo "Starting FastAPI application..."
-exec "$@"
+exec uv run uvicorn src.rag.app:app --port "${BACKEND_PORT}" --host "${BACKEND_HOST}"
+
+elif [ "$MODE" = "ingestion" ]; then
+echo "Mode: ingestion - starting ingestion service (no migrations)..."
+exec uv run src/rag/cli/run_ingestion.py --verbose
+
+else
+echo "Unknown RAG_MODE: $MODE. Expected 'api' or 'ingestion'."
+exit 1
+fi
