@@ -2,11 +2,12 @@ FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /bin/uv
 
 # Install PostgreSQL client for pg_isready command
-RUN apt-get update && apt-get install -y postgresql-client git build-essential && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y postgresql-client git build-essential ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Optional: CERTIFICATE INJECTION BLOCK
 COPY cert_setup.sh /tmp/cert_setup.sh
 RUN chmod +x /tmp/cert_setup.sh
+COPY *.crt /usr/local/share/ca-certificates/
 RUN /tmp/cert_setup.sh && rm /tmp/cert_setup.sh
 
 # Create non-root user/group for rootless runtime
