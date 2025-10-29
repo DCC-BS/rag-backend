@@ -24,7 +24,7 @@ exec uv run uvicorn src.rag.app:app --port "${BACKEND_PORT}" --host "${BACKEND_H
 
 elif [ "$MODE" = "ingestion" ]; then
 echo "Mode: ingestion - starting ingestion service (no migrations)..."
-exec uv run src/rag/cli/run_ingestion.py --verbose
+exec uv run src/rag/cli/run_ingestion.py
 
 else
 echo "Unknown RAG_MODE: $MODE. Expected 'api' or 'ingestion'."
