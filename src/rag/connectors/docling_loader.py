@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -153,7 +154,7 @@ class DoclingAPILoader(BaseLoader):
             self.logger.exception(f"Error converting document {source} via API.")
             return None
 
-    def _get_token_count(self, text: str) -> int:
+    def _get_token_count(self, text: str, retry_count: int = 0) -> int:
         """Get token count for text using LLM API."""
         try:
             embedding_base_url: str = self._config.EMBEDDINGS.API_URL.rstrip("/v1")
@@ -168,15 +169,30 @@ class DoclingAPILoader(BaseLoader):
                 if response.status_code == 200:
                     result = response.json()
                     return result.get("count", 0)
+                elif response.status_code == 429:
+                    self.logger.warning(
+                        f"Rate limit exceeded, waiting for {3 + retry_count * 2} seconds and retrying..."
+                    )
+                    time.sleep(3 + retry_count * 2)
+                    if retry_count < self._config.DOCLING.MAX_RETRIES:
+                        return self._get_token_count(text, retry_count + 1)
+                    else:
+                        token_count = self._get_token_count_fallback(text)
+                        self.logger.warning(
+                            f"Max retries {self._config.DOCLING.MAX_RETRIES} reached, returning {token_count} tokens"
+                        )
+                        return token_count
                 else:
                     self.logger.warning(f"Tokenization failed: {response.status_code}")
-                    # Fallback: rough estimation (1 token ≈ 4 characters)
-                    return len(text) // 4
+                    return self._get_token_count_fallback(text)
 
         except Exception as e:
             self.logger.warning(f"Error tokenizing text: {e}")
-            # Fallback: rough estimation (1 token ≈ 4 characters)
-            return len(text) // 4
+            return self._get_token_count_fallback(text)
+
+    def _get_token_count_fallback(self, text: str) -> int:
+        """Fallback for getting token count."""
+        return len(text) // 5
 
     def _process_markdown_content(self, markdown_content: str, path_source: Path, source: str) -> Iterator[LCDocument]:
         """Process markdown content by splitting into pages and chunking."""

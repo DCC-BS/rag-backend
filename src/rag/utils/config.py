@@ -45,6 +45,7 @@ class DoclingConfig:
     MAX_TOKENS: int
     MIN_TOKENS: int
     PAGE_BREAK_PLACEHOLDER: str
+    MAX_RETRIES: int
 
 
 @dataclass
