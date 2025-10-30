@@ -34,7 +34,7 @@ class S3DocumentIngestionService:
         self.logger = get_logger()
 
         db_url: str = get_db_url()
-        self.engine: Engine = create_engine(url=db_url)
+        self.engine: Engine = create_engine(url=db_url, pool_pre_ping=True)
 
         # Setup embedding client and model
         embedding_client_info = get_embedding_client(self.config)

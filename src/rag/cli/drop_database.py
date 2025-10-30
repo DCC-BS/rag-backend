@@ -76,7 +76,7 @@ def main() -> None:
 
     try:
         db_url: str = get_db_url()
-        engine: Engine = create_engine(url=db_url)
+        engine: Engine = create_engine(url=db_url, pool_pre_ping=True)
 
         if args.drop_schema:
             drop_schema_cascade(engine)

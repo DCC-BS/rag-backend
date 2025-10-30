@@ -96,7 +96,7 @@ class PGRoleRetriever(BaseRetriever):
         self._reranker_model: str = reranker_client_info.model
 
         db_url: str = get_db_url()
-        self._engine: Engine = create_engine(url=db_url)
+        self._engine: Engine = create_engine(url=db_url, pool_pre_ping=True)
         self._logger = get_logger()
         self._bm25_limit: int = bm25_limit
         self._vector_limit: int = vector_limit

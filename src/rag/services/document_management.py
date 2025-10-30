@@ -30,7 +30,7 @@ class DocumentManagementService:
         self.logger = get_logger()
 
         db_url: str = get_db_url()
-        self.engine: Engine = create_engine(url=db_url)
+        self.engine: Engine = create_engine(url=db_url, pool_pre_ping=True)
 
         # S3 utilities setup
         self.s3_utils = S3Utils(config)
