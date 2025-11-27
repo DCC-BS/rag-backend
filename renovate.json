@@ -8,6 +8,8 @@
   "labels": [
     "renovate"
   ],
+  "internalChecksFilter": "strict",
+  "minimumReleaseAge": "14 days",
   "packageRules": [
     {
       "automerge": true,
@@ -75,7 +77,6 @@
       "matchFileNames": [
         ".devcontainer/devcontainer.json"
       ],
-      "minimumReleaseAge": "7 days"
     },
     {
       "automerge": true,
