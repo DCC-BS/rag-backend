@@ -1,4 +1,8 @@
-# SH RAG Chat
+# Archived
+
+We no longer work on this project. This project is not ready for production. We do not recommend to use this RAG implementation.
+
+# RAG Chat
 
 [![Release](https://img.shields.io/github/v/release/DCC-BS/rag-backend)](https://img.shields.io/github/v/release/DCC-BS/rag-backend)
 [![Build status](https://img.shields.io/github/actions/workflow/status/DCC-BS/rag-backend/main.yml?branch=main)](https://github.com/DCC-BS/rag-backend/actions/workflows/main.yml?query=branch%3Amain)
